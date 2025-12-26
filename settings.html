@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - SnapSeek</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="settings-container">
+            <div class="settings-header">
+                <button id="back-to-home" class="back-button" title="Back to Home">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
+                <h1 class="settings-title">Settings</h1>
+            </div>
+
+            <div class="settings-content">
+                <div class="setting-group">
+                    <label class="setting-label">Download Directory</label>
+                    <p class="setting-description">
+                        Choose where downloaded images will be saved. All images are automatically converted to PNG
+                        format.
+                    </p>
+                    <div class="setting-value" id="current-path">Loading...</div>
+                    <button id="change-path-btn" class="primary-button">Choose Folder</button>
+                </div>
+
+                <div class="setting-group">
+                    <label class="setting-label">About SnapSeek</label>
+                    <p class="setting-description">
+                        Version 1.0.0<br>
+                        Modern image browser with ad-blocking and automatic PNG conversion.<br>
+                        <br>
+                        <strong>Features:</strong><br>
+                        • In-app browsing for Pinterest, Safebooru, and Pixiv<br>
+                        • Built-in ad blocker for cleaner experience<br>
+                        • Automatic PNG conversion for all downloads<br>
+                        • Persistent settings across sessions
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const backBtn = document.getElementById('back-to-home');
+            const changePathBtn = document.getElementById('change-path-btn');
+            const currentPathDisplay = document.getElementById('current-path');
+
+            // Load current download path
+            async function loadCurrentPath() {
+                if (window.snapseek) {
+                    const path = await window.snapseek.getDownloadPath();
+                    currentPathDisplay.textContent = path;
+                }
+            }
+
+            // Back to home
+            backBtn.addEventListener('click', async () => {
+                if (window.snapseek) {
+                    await window.snapseek.closeSettings();
+                }
+            });
+
+            // Change download path
+            changePathBtn.addEventListener('click', async () => {
+                if (window.snapseek) {
+                    const result = await window.snapseek.setDownloadPath();
+                    if (result.success) {
+                        currentPathDisplay.textContent = result.path;
+                    }
+                }
+            });
+
+            // Initial load
+            await loadCurrentPath();
+        });
+    </script>
+</body>
+
+</html>
