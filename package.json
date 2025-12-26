@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
+    "build": "npm run create-icon && electron-builder",
     "build:installer": "node create-icon.js && electron-builder --prepackaged=dist/win-unpacked --win nsis",
     "create-icon": "node create-icon.js"
   },
@@ -51,7 +51,7 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "24.13.3",
     "png-to-ico": "^3.0.1",
     "to-ico": "^1.1.5"
   },
@@ -60,6 +60,6 @@
     "cross-fetch": "^4.0.0",
     "darkreader": "^4.9.118",
     "electron-store": "^8.1.0",
-    "sharp": "^0.33.0"
+    "sharp": "0.32.6"
   }
 }
