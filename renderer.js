@@ -39,12 +39,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navBar) {
                 navBar.classList.remove('hidden');
             }
+            // Hide the service selector (cards) so they don't show through
+            const selector = document.getElementById('service-selector');
+            if (selector) selector.classList.add('hidden');
         });
 
         window.snapseek.onHideNavBar(() => {
             if (navBar) {
                 navBar.classList.add('hidden');
             }
+            // Show the service selector again
+            const selector = document.getElementById('service-selector');
+            if (selector) selector.classList.remove('hidden');
         });
     }
 });

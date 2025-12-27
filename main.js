@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -54,9 +54,37 @@ function createBrowserView(url) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false // nuclear option for image loading
     }
   });
+
+  // Ensure background is opaque white (prevents bleed-through if site has transparent background)
+  currentView.setBackgroundColor('#ffffff');
+
+  // Set User Agent to standard Chrome on Windows to prevent site blocking/lazy-loading issues
+  // Using Chrome 124 to ensure maximum compatibility
+  currentView.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
+
+  // Fix for anti-hotlinking: Inject Referer headers
+  // Pinterest and Pixiv images often return 403 Forbidden if the Referer header is missing or incorrect
+  currentView.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ['*://*.pinimg.com/*', '*://*.pinterest.com/*', '*://*.pixiv.net/*', '*://*.pximg.net/*'] },
+    (details, callback) => {
+      const { requestHeaders } = details;
+      const url = new URL(details.url);
+
+      if (url.hostname.includes('pinterest') || url.hostname.includes('pinimg')) {
+        requestHeaders['Referer'] = 'https://www.pinterest.com/';
+        requestHeaders['Origin'] = 'https://www.pinterest.com';
+      } else if (url.hostname.includes('pixiv') || url.hostname.includes('pximg')) {
+        requestHeaders['Referer'] = 'https://www.pixiv.net/';
+        requestHeaders['Origin'] = 'https://www.pixiv.net';
+      }
+
+      callback({ requestHeaders });
+    }
+  );
 
   mainWindow.addBrowserView(currentView);
 
@@ -75,34 +103,34 @@ function createBrowserView(url) {
   });
 
   // Apply ad blocker to this view
-  if (blocker) {
-    blocker.enableBlockingInSession(currentView.webContents.session);
-  }
+  // AdBlocker disabled to fix image loading issues
+  // if (blocker) { ... }
 
   // Load the URL
   currentView.webContents.loadURL(url);
 
   // Inject content script after page loads
   currentView.webContents.on('did-finish-load', () => {
+    // Nuclear option: Unregister all service workers to force fresh network requests
+    // This fixes issues where broken/403 responses are cached
+    currentView.webContents.executeJavaScript(`
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            console.log('SnapSeek: Unregistering SW:', registration);
+            registration.unregister();
+          }
+        });
+      }
+    `);
+
     // Inject Dark Reader first
     const darkReaderPath = path.join(__dirname, 'node_modules', 'darkreader', 'darkreader.js');
     const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
     currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
-      // Enable Dark Reader with custom config
-      const darkModeConfig = `
-        if (window.DarkReader) {
-          DarkReader.enable({
-            brightness: 100,
-            contrast: 100,
-            sepia: 0,
-            grayscale: 0,
-            darkSchemeBackgroundColor: '#181a1b',
-            darkSchemeTextColor: '#e8e6e3'
-          });
-          console.log('SnapSeek: Dark Reader enabled');
-        }
-      `;
-      currentView.webContents.executeJavaScript(darkModeConfig);
+      // Inject custom dark mode script
+      const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
+      currentView.webContents.executeJavaScript(darkModeScript);
     });
 
     // Inject download button overlay script
@@ -116,26 +144,29 @@ function createBrowserView(url) {
     const darkReaderPath = path.join(__dirname, 'node_modules', 'darkreader', 'darkreader.js');
     const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
     currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
-      // Enable Dark Reader with custom config
-      const darkModeConfig = `
-        if (window.DarkReader) {
-          DarkReader.enable({
-            brightness: 100,
-            contrast: 100,
-            sepia: 0,
-            grayscale: 0,
-            darkSchemeBackgroundColor: '#181a1b',
-            darkSchemeTextColor: '#e8e6e3'
-          });
-          console.log('SnapSeek: Dark Reader enabled');
-        }
-      `;
-      currentView.webContents.executeJavaScript(darkModeConfig);
+      // Inject custom dark mode script
+      const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
+      currentView.webContents.executeJavaScript(darkModeScript);
     });
 
     // Inject download button overlay script
     const injectScript = fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf8');
     currentView.webContents.executeJavaScript(injectScript);
+
+    // Context Menu for Downloading Images
+    currentView.webContents.on('context-menu', (event, params) => {
+      if (params.mediaType === 'image' && params.srcURL) {
+        const menu = Menu.buildFromTemplate([
+          {
+            label: 'Download Image',
+            click: () => {
+              downloadImage(params.srcURL); // Call internal helper
+            }
+          }
+        ]);
+        menu.popup(currentView.webContents);
+      }
+    });
   });
 
   // Send message to main window to show navigation bar
@@ -170,7 +201,8 @@ ipcMain.handle('close-service', () => {
   closeBrowserView();
 });
 
-ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
+// Standalone download function for Context Menu and IPC
+async function downloadImage(imageUrl) {
   try {
     const downloadPath = store.get('downloadPath', defaultDownloadPath);
 
@@ -180,12 +212,13 @@ ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
     }
 
     // Generate random hash-like filename (32 chars like MD5)
+    // User requested random string
     const crypto = require('crypto');
     const randomHash = crypto.randomBytes(16).toString('hex');
     let filename = randomHash;
     let outputPath = path.join(downloadPath, `${filename}.png`);
 
-    // Check for duplicates and add (1), (2), etc. if needed
+    // Check for duplicates
     let counter = 1;
     while (fs.existsSync(outputPath)) {
       filename = `${randomHash} (${counter})`;
@@ -196,6 +229,9 @@ ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
     // Download image
     const response = await fetch(imageUrl);
     if (!response.ok) {
+      // Fallback for some headers?
+      // Maybe try electron net?
+      // But fetch should work if we disable webSecurity
       throw new Error(`Failed to download image: ${response.statusText}`);
     }
 
@@ -207,11 +243,18 @@ ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
       .png()
       .toFile(outputPath);
 
+    // Notify user via console or success
+    console.log(`SnapSeek: Downloaded to ${outputPath}`);
+
     return { success: true, path: outputPath };
   } catch (error) {
     console.error('Download error:', error);
     return { success: false, error: error.message };
   }
+}
+
+ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
+  return await downloadImage(imageUrl);
 });
 
 ipcMain.handle('get-download-path', () => {
@@ -243,7 +286,7 @@ ipcMain.handle('close-settings', () => {
 
 // App lifecycle
 app.whenReady().then(async () => {
-  await initializeAdBlocker();
+  // await initializeAdBlocker(); // Disabled
   createWindow();
 
   app.on('activate', () => {

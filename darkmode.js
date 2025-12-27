@@ -8,8 +8,13 @@
     if (window._darkReaderInjected) return;
     window._darkReaderInjected = true;
 
-    // Dark Reader configuration optimized for image browsing sites
-    const darkReaderConfig = {
+    const hostname = window.location.hostname;
+
+    // Dark Mode is now safe to enable thanks to robust image persistence in inject.js
+    // if (hostname.includes('pinterest') || hostname.includes('pixvin') || hostname.includes('pixiv')) { ... }
+
+    // Default configuration
+    let config = {
         brightness: 100,
         contrast: 100,
         sepia: 0,
@@ -21,10 +26,21 @@
         lightSchemeTextColor: '#000000',
     };
 
+    // Site-specific fixes (Legacy/Unused if returned early)
+    // Kept structure for potential future use or other sites
+
     // Import and enable Dark Reader
     // Note: This will be loaded from the node_modules via Electron's main process
     if (window.DarkReader) {
-        window.DarkReader.enable(darkReaderConfig);
-        console.log('SnapSeek: Dark Reader enabled');
+        // Apply fixes if defined
+        if (config.fixes && config.fixes.css) {
+            // We can inject custom CSS via DarkReader if needed, or just append a style tag
+            const style = document.createElement('style');
+            style.textContent = config.fixes.css;
+            document.head.appendChild(style);
+        }
+
+        window.DarkReader.enable(config);
+        console.log(`SnapSeek: Dark Reader enabled for ${hostname} with mode ${config.mode}`);
     }
 })();
