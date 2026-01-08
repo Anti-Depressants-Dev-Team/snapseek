@@ -33,7 +33,8 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    icon: path.resolve(__dirname, 'icon.ico')
+    icon: path.resolve(__dirname, 'icon.ico'),
+    frame: false // Custom Title Bar
   });
 
   mainWindow.loadFile('index.html');
@@ -88,13 +89,13 @@ function createBrowserView(url) {
 
   mainWindow.addBrowserView(currentView);
 
-  // Set bounds (leave space for navigation bar at top: 60px)
+  // Set bounds (leave space for navigation bar at top: 40px)
   const bounds = mainWindow.getContentBounds();
   currentView.setBounds({
     x: 0,
-    y: 60,
+    y: 40,
     width: bounds.width,
-    height: bounds.height - 60
+    height: bounds.height - 40
   });
 
   currentView.setAutoResize({
@@ -102,17 +103,12 @@ function createBrowserView(url) {
     height: true
   });
 
-  // Apply ad blocker to this view
-  // AdBlocker disabled to fix image loading issues
-  // if (blocker) { ... }
-
   // Load the URL
   currentView.webContents.loadURL(url);
 
   // Inject content script after page loads
   currentView.webContents.on('did-finish-load', () => {
     // Nuclear option: Unregister all service workers to force fresh network requests
-    // This fixes issues where broken/403 responses are cached
     currentView.webContents.executeJavaScript(`
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
@@ -126,30 +122,30 @@ function createBrowserView(url) {
 
     // Inject Dark Reader first
     const darkReaderPath = path.join(__dirname, 'node_modules', 'darkreader', 'darkreader.js');
-    const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
-    currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
-      // Inject custom dark mode script
-      const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
-      currentView.webContents.executeJavaScript(darkModeScript);
-    });
+    if (fs.existsSync(darkReaderPath)) {
+      const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
+      currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
+        // Inject custom dark mode script
+        const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
+        currentView.webContents.executeJavaScript(darkModeScript);
+      });
+    }
 
     // Inject download button overlay script
     const injectScript = fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf8');
     currentView.webContents.executeJavaScript(injectScript);
   });
 
-  // Handle navigation - keep injecting script on new pages
+  // Handle navigation
   currentView.webContents.on('did-navigate', () => {
-    // Inject Dark Reader first
     const darkReaderPath = path.join(__dirname, 'node_modules', 'darkreader', 'darkreader.js');
-    const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
-    currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
-      // Inject custom dark mode script
-      const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
-      currentView.webContents.executeJavaScript(darkModeScript);
-    });
-
-    // Inject download button overlay script
+    if (fs.existsSync(darkReaderPath)) {
+      const darkReaderScript = fs.readFileSync(darkReaderPath, 'utf8');
+      currentView.webContents.executeJavaScript(darkReaderScript).then(() => {
+        const darkModeScript = fs.readFileSync(path.join(__dirname, 'darkmode.js'), 'utf8');
+        currentView.webContents.executeJavaScript(darkModeScript);
+      });
+    }
     const injectScript = fs.readFileSync(path.join(__dirname, 'inject.js'), 'utf8');
     currentView.webContents.executeJavaScript(injectScript);
 
@@ -169,7 +165,7 @@ function createBrowserView(url) {
     });
   });
 
-  // Send message to main window to show navigation bar
+  // Send message to main window to show navigation bar (controls)
   mainWindow.webContents.send('show-nav-bar');
 }
 
@@ -199,6 +195,29 @@ ipcMain.handle('open-service', (event, serviceName) => {
 
 ipcMain.handle('close-service', () => {
   closeBrowserView();
+});
+
+ipcMain.handle('go-back', () => {
+  if (currentView && currentView.webContents && currentView.webContents.canGoBack()) {
+    currentView.webContents.goBack();
+  }
+});
+
+// Window Controls
+ipcMain.handle('window-minimize', () => {
+  mainWindow.minimize();
+});
+
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow.isMaximized()) {
+    mainWindow.unmaximize();
+  } else {
+    mainWindow.maximize();
+  }
+});
+
+ipcMain.handle('window-close', () => {
+  mainWindow.close();
 });
 
 // Standalone download function for Context Menu and IPC
@@ -308,9 +327,9 @@ app.on('browser-window-resize', () => {
     const bounds = mainWindow.getContentBounds();
     currentView.setBounds({
       x: 0,
-      y: 60,
+      y: 40,
       width: bounds.width,
-      height: bounds.height - 60
+      height: bounds.height - 40
     });
   }
 });
