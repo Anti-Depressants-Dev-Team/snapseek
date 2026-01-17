@@ -5,6 +5,7 @@ node_modules/
 dist/
 out/
 build/
+dist-installer/
 
 # OS specific
 .DS_Store

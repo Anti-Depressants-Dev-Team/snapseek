@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('snapseek', {
     openService: (serviceName) => ipcRenderer.invoke('open-service', serviceName),
     closeService: () => ipcRenderer.invoke('close-service'),
     goBack: () => ipcRenderer.invoke('go-back'),
-    downloadImage: (imageUrl, filename) => ipcRenderer.invoke('download-image', imageUrl, filename),
+    downloadImage: (imageUrl, format) => ipcRenderer.invoke('download-image', imageUrl, format),
     getDownloadPath: () => ipcRenderer.invoke('get-download-path'),
     setDownloadPath: () => ipcRenderer.invoke('set-download-path'),
     openSettings: () => ipcRenderer.invoke('open-settings'),
@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('snapseek', {
     onHideNavBar: (callback) => ipcRenderer.on('hide-nav-bar', callback),
     minimize: () => ipcRenderer.invoke('window-minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window-maximize'),
-    close: () => ipcRenderer.invoke('window-close')
+    close: () => ipcRenderer.invoke('window-close'),
+    getServiceStates: () => ipcRenderer.invoke('get-service-states'),
+    toggleServiceState: (serviceName, state) => ipcRenderer.invoke('toggle-service-state', serviceName, state),
+    getAllServices: () => ipcRenderer.invoke('get-all-services'),
+    addCustomService: (serviceData) => ipcRenderer.invoke('add-custom-service', serviceData),
+    removeCustomService: (serviceId) => ipcRenderer.invoke('remove-custom-service', serviceId)
 });

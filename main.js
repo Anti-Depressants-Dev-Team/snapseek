@@ -154,9 +154,27 @@ function createBrowserView(url) {
       if (params.mediaType === 'image' && params.srcURL) {
         const menu = Menu.buildFromTemplate([
           {
-            label: 'Download Image',
+            label: 'Download as PNG (Default)',
             click: () => {
-              downloadImage(params.srcURL); // Call internal helper
+              downloadImage(params.srcURL, 'png');
+            }
+          },
+          {
+            label: 'Download as JPG',
+            click: () => {
+              downloadImage(params.srcURL, 'jpg');
+            }
+          },
+          {
+            label: 'Download as JPEG',
+            click: () => {
+              downloadImage(params.srcURL, 'jpeg');
+            }
+          },
+          {
+            label: 'Download as GIF',
+            click: () => {
+              downloadImage(params.srcURL, 'gif');
             }
           }
         ]);
@@ -180,17 +198,59 @@ function closeBrowserView() {
 }
 
 // IPC Handlers
-ipcMain.handle('open-service', (event, serviceName) => {
-  const serviceUrls = {
-    pinterest: 'https://ru.pinterest.com/',
-    safebooru: 'https://safebooru.org/',
-    pixiv: 'https://www.pixiv.net/'
-  };
+// Default Services Configuration
+const DEFAULT_SERVICES = [
+  { id: 'pinterest', name: 'Pinterest', url: 'https://ru.pinterest.com/', icon: 'pinterest', type: 'default' },
+  { id: 'safebooru', name: 'Safebooru', url: 'https://safebooru.org/', icon: 'safebooru', type: 'default' },
+  { id: 'pixiv', name: 'Pixiv', url: 'https://www.pixiv.net/', icon: 'pixiv', type: 'default' },
+  { id: 'wallpapers', name: 'Wallpapers', url: 'https://wallpapers.com/', icon: 'wallpapers', type: 'default' }
+];
 
-  const url = serviceUrls[serviceName];
-  if (url) {
-    createBrowserView(url);
+// Helper to get all services
+function getAllServices() {
+  const customServices = store.get('customServices', []);
+  return [...DEFAULT_SERVICES, ...customServices];
+}
+
+ipcMain.handle('open-service', (event, serviceId) => {
+  const services = getAllServices();
+  const service = services.find(s => s.id === serviceId);
+
+  if (service && service.url) {
+    createBrowserView(service.url);
   }
+});
+
+// Service Management IPC
+ipcMain.handle('get-all-services', () => {
+  return getAllServices();
+});
+
+ipcMain.handle('add-custom-service', (event, serviceData) => {
+  const customServices = store.get('customServices', []);
+  const newService = {
+    id: `custom_${Date.now()}`,
+    name: serviceData.name,
+    url: serviceData.url,
+    icon: serviceData.iconUrl || 'default', // We'll handle icon rendering in frontend
+    type: 'custom'
+  };
+  customServices.push(newService);
+  store.set('customServices', customServices);
+
+  // Also init its state to enabled by default
+  const states = store.get('serviceStates', {});
+  states[newService.id] = true;
+  store.set('serviceStates', states);
+
+  return getAllServices();
+});
+
+ipcMain.handle('remove-custom-service', (event, serviceId) => {
+  let customServices = store.get('customServices', []);
+  customServices = customServices.filter(s => s.id !== serviceId);
+  store.set('customServices', customServices);
+  return getAllServices();
 });
 
 ipcMain.handle('close-service', () => {
@@ -221,7 +281,7 @@ ipcMain.handle('window-close', () => {
 });
 
 // Standalone download function for Context Menu and IPC
-async function downloadImage(imageUrl) {
+async function downloadImage(imageUrl, format = 'png') {
   try {
     const downloadPath = store.get('downloadPath', defaultDownloadPath);
 
@@ -235,35 +295,55 @@ async function downloadImage(imageUrl) {
     const crypto = require('crypto');
     const randomHash = crypto.randomBytes(16).toString('hex');
     let filename = randomHash;
-    let outputPath = path.join(downloadPath, `${filename}.png`);
+
+    // Normalize format
+    format = format.toLowerCase();
+    if (format === 'jpeg') format = 'jpg';
+
+    let extension = format;
+    if (extension === 'jpg') extension = 'jpg'; // Explicitly set for clarity
+
+    let outputPath = path.join(downloadPath, `${filename}.${extension}`);
 
     // Check for duplicates
-    let counter = 1;
+    let counter = 2; // User requested starts with (2)
     while (fs.existsSync(outputPath)) {
-      filename = `${randomHash} (${counter})`;
-      outputPath = path.join(downloadPath, `${filename}.png`);
+      // User requested: if there are 2 of the same names just add a (2)
+      // If "filename.png" exists, next is "filename (2).png"
+      // If "filename (2).png" exists, next is "filename (3).png"
+      outputPath = path.join(downloadPath, `${filename} (${counter}).${extension}`);
       counter++;
     }
 
     // Download image
     const response = await fetch(imageUrl);
     if (!response.ok) {
-      // Fallback for some headers?
-      // Maybe try electron net?
-      // But fetch should work if we disable webSecurity
       throw new Error(`Failed to download image: ${response.statusText}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Convert to PNG using Sharp
-    await sharp(buffer)
-      .png()
-      .toFile(outputPath);
+    // Convert using Sharp
+    let pipeline = sharp(buffer);
+
+    if (format === 'png') {
+      pipeline = pipeline.png();
+    } else if (format === 'jpg' || format === 'jpeg') {
+      pipeline = pipeline.jpeg({ quality: 90 });
+    } else if (format === 'gif') {
+      // Sharp GIF support requires libvips with gif support. 
+      // Simple GIF output:
+      pipeline = pipeline.gif();
+    }
+
+    await pipeline.toFile(outputPath);
 
     // Notify user via console or success
     console.log(`SnapSeek: Downloaded to ${outputPath}`);
+
+    // Optional: Flash the taskbar or show a notification?
+    // For now, silently succeed as requested functionality is just core logic.
 
     return { success: true, path: outputPath };
   } catch (error) {
@@ -272,8 +352,8 @@ async function downloadImage(imageUrl) {
   }
 }
 
-ipcMain.handle('download-image', async (event, imageUrl, originalFilename) => {
-  return await downloadImage(imageUrl);
+ipcMain.handle('download-image', async (event, imageUrl, format = 'png') => {
+  return await downloadImage(imageUrl, format);
 });
 
 ipcMain.handle('get-download-path', () => {
@@ -301,6 +381,25 @@ ipcMain.handle('open-settings', () => {
 
 ipcMain.handle('close-settings', () => {
   mainWindow.loadFile('index.html');
+});
+
+// Service State Management
+ipcMain.handle('get-service-states', () => {
+  const defaultStates = {};
+  getAllServices().forEach(s => {
+    // Default enabled except wallpapers if that was the preference, but let's just make all enabled by default for simplicity or check store
+    defaultStates[s.id] = true;
+  });
+  // Wallpapers defaults to false in legacy, let's respect current store or default
+
+  return store.get('serviceStates', defaultStates);
+});
+
+ipcMain.handle('toggle-service-state', (event, serviceName, state) => {
+  const currentStates = store.get('serviceStates', {});
+  currentStates[serviceName] = state;
+  store.set('serviceStates', currentStates);
+  return currentStates;
 });
 
 // App lifecycle

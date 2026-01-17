@@ -80,46 +80,49 @@
       </header>
 
       <main class="services-grid">
-        <div class="service-card" data-service="pinterest">
-          <div class="service-icon pinterest">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-              <path
-                d="M24 4C12.96 4 4 12.96 4 24C4 32.52 9.48 39.72 17.04 42.36C16.92 40.92 16.8 38.64 17.16 37.08C17.52 35.64 19.32 27.84 19.32 27.84C19.32 27.84 18.72 26.64 18.72 24.84C18.72 21.96 20.4 19.8 22.56 19.8C24.36 19.8 25.2 21.12 25.2 22.68C25.2 24.48 24 27.24 23.4 29.76C22.92 31.92 24.48 33.72 26.64 33.72C30.48 33.72 33.48 29.52 33.48 23.64C33.48 18.48 29.76 14.88 24 14.88C17.4 14.88 13.56 19.68 13.56 24.48C13.56 26.28 14.28 28.2 15.12 29.28C15.24 29.52 15.24 29.64 15.24 29.88C15 31.08 14.52 32.64 14.4 33.12C14.28 33.72 14.04 33.84 13.44 33.6C10.68 32.28 8.88 28.68 8.88 24.36C8.88 17.28 14.04 10.8 24.6 10.8C33.12 10.8 39.72 16.8 39.72 23.52C39.72 30.6 34.92 36.36 28.44 36.36C26.28 36.36 24.24 35.16 23.52 33.84C23.52 33.84 22.44 38.16 22.2 39C21.72 40.92 20.4 43.32 19.56 44.88C21.24 45.36 22.56 45.6 24 45.6C35.04 45.6 44 36.6 44 24.6C44 12.96 35.04 4 24 4Z"
-                fill="currentColor" />
-            </svg>
-          </div>
-          <h2 class="service-name">Pinterest</h2>
-          <p class="service-description">Discover creative and inspiring images</p>
-          <div class="service-badge">Browse</div>
-        </div>
-
-        <div class="service-card" data-service="safebooru">
-          <div class="service-icon safebooru">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-              <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="3" />
-              <circle cx="18" cy="18" r="3" fill="currentColor" />
-              <path d="M40 28L32 20L20 32L12 24L8 28V36C8 37.1046 8.89543 38 10 38H38C39.1046 38 40 37.1046 40 36V28Z"
-                fill="currentColor" />
-            </svg>
-          </div>
-          <h2 class="service-name">Safebooru</h2>
-          <p class="service-description">Family-friendly anime art collection</p>
-          <div class="service-badge">Browse</div>
-        </div>
-
-        <div class="service-card" data-service="pixiv">
-          <div class="service-icon pixiv">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-              <path
-                d="M24 4C12.96 4 4 12.96 4 24C4 35.04 12.96 44 24 44C35.04 44 44 35.04 44 24C44 12.96 35.04 4 24 4ZM28.8 26.4H20.4V32.4H16.8V15.6H28.8C31.68 15.6 34.08 18 34.08 20.88C34.08 23.76 31.68 26.4 28.8 26.4ZM20.4 19.2V22.8H28.8C29.76 22.8 30.48 22.08 30.48 21.12C30.48 20.16 29.76 19.2 28.8 19.2H20.4Z"
-                fill="currentColor" />
-            </svg>
-          </div>
-          <h2 class="service-name">Pixiv</h2>
-          <p class="service-description">Explore artwork from Japanese artists</p>
-          <div class="service-badge">Browse</div>
-        </div>
+        <!-- Dynamic Content -->
       </main>
+
+      <!-- Services Toggle Button -->
+      <div class="services-toggle-container">
+        <button id="services-toggle-btn" class="services-toggle-btn" title="Manage Services">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Services
+        </button>
+
+        <div id="services-modal" class="services-modal hidden">
+          <div class="services-modal-content">
+            <h3>Manage Services</h3>
+            <!-- Dynamic list here -->
+          </div>
+        </div>
+
+        <div id="add-service-modal" class="services-modal hidden">
+          <div class="services-modal-content" style="max-width: 400px;">
+            <h3>Add Custom Service</h3>
+            <form id="add-service-form" style="display: flex; flex-direction: column; gap: 15px;">
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Service Name</label>
+                <input type="text" id="new-service-name" placeholder="E.g. DeviantArt" class="modal-input" required>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Service URL</label>
+                <input type="url" id="new-service-url" placeholder="https://..." class="modal-input" required>
+              </div>
+              <div>
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Icon URL (Optional)</label>
+                <input type="url" id="new-service-icon" placeholder="https://.../favicon.ico" class="modal-input">
+              </div>
+              <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button type="button" id="add-service-cancel" class="cancel-btn">Cancel</button>
+                <button type="submit" class="submit-btn">Add Service</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
