@@ -23,6 +23,19 @@
 
             <div class="settings-content">
                 <div class="setting-group">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label class="setting-label" style="margin-bottom: 0;">Dark Mode</label>
+                        <label class="switch">
+                            <input type="checkbox" id="dark-mode-toggle">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    <p class="setting-description">
+                        Enable automatic dark mode for all websites (requires restart or page reload to apply).
+                    </p>
+                </div>
+                <div class="setting-group">
                     <label class="setting-label">Download Directory</label>
                     <p class="setting-description">
                         Choose where downloaded images will be saved. All images are automatically converted to PNG
@@ -77,6 +90,22 @@
                     if (result.success) {
                         currentPathDisplay.textContent = result.path;
                     }
+                }
+            });
+
+            // Dark Mode Toggle
+            const darkModeToggle = document.getElementById('dark-mode-toggle');
+
+            // Load initial state
+            if (window.snapseek && window.snapseek.getDarkModeState) {
+                const isDarkMode = await window.snapseek.getDarkModeState();
+                darkModeToggle.checked = isDarkMode;
+            }
+
+            // Handle toggle
+            darkModeToggle.addEventListener('change', async (e) => {
+                if (window.snapseek && window.snapseek.toggleDarkModeState) {
+                    await window.snapseek.toggleDarkModeState(e.target.checked);
                 }
             });
 

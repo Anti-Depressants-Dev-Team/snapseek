@@ -50,8 +50,8 @@
   "author": "Yabosen",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.0.0",
-    "electron-builder": "24.13.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "png-to-ico": "^3.0.1",
     "to-ico": "^1.1.5"
   },

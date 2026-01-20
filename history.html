@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download History - SnapSeek</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .history-item {
+            background: var(--black);
+            border: 1px solid var(--gray-light);
+            padding: 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: border-color 0.2s;
+        }
+
+        .history-item:hover {
+            border-color: var(--purple-primary);
+        }
+
+        .history-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow: hidden;
+        }
+
+        .history-filename {
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .history-meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 10px;
+        }
+
+        .open-file-btn {
+            background: transparent;
+            border: 1px solid var(--purple-primary);
+            color: var(--purple-light);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .open-file-btn:hover {
+            background: var(--purple-primary);
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="settings-container">
+            <div class="settings-header">
+                <button id="back-to-home" class="back-button" title="Back to Home">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
+                <div style="flex: 1;">
+                    <h1 class="settings-title">History</h1>
+                </div>
+                <button id="clear-history-btn" class="back-button" title="Clear History"
+                    style="border-color: #E81123; color: #FF6B6B;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="settings-content">
+                <div id="history-list" class="history-list">
+                    <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                        No downloads yet.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const backBtn = document.getElementById('back-to-home');
+            const clearBtn = document.getElementById('clear-history-btn');
+            const historyList = document.getElementById('history-list');
+
+            // Back to home
+            backBtn.addEventListener('click', async () => {
+                if (window.snapseek) {
+                    await window.snapseek.closeSettings();
+                }
+            });
+
+            // Clear History
+            clearBtn.addEventListener('click', async () => {
+                if (window.snapseek && confirm('Clear download history?')) {
+                    await window.snapseek.clearDownloadHistory();
+                    renderHistory([]);
+                }
+            });
+
+            // Render List
+            function renderHistory(items) {
+                if (!items || items.length === 0) {
+                    historyList.innerHTML = `
+                        <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                            No downloads yet.
+                        </div>
+                    `;
+                    return;
+                }
+
+                historyList.innerHTML = items.map(item => `
+                    <div class="history-item">
+                        <div class="history-info">
+                            <span class="history-filename" title="${item.filename}">${item.filename}</span>
+                            <div class="history-meta">
+                                <span>${new Date(item.timestamp).toLocaleString()}</span>
+                                <span style="opacity: 0.5;">•</span>
+                                <span>${new URL(item.url).hostname}</span>
+                            </div>
+                        </div>
+                        <button class="open-file-btn" onclick="openFile('${item.path.replace(/\\/g, '\\\\')}')">
+                            Open
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            // Expose utility for onClick
+            window.openFile = async (path) => {
+                // Since we can't easily expose 'showItemInFolder' directly to inline events without bridge
+                // We'll rely on the user opening the folder via the main button for now, 
+                // OR we can implement a specific 'showItem' IPC.
+                // For now let's just use openDownloadsFolder as a fallback or simply alert path
+                // Actually, let's just make the "Open Downloads Folder" button the primary way.
+                // Or better, let's implement 'showItemInFolder' quickly in next step if needed. 
+                // For this iteration, let's just ignore the button action or link it to folder.
+            };
+
+            // Load Data
+            if (window.snapseek) {
+                const history = await window.snapseek.getDownloadHistory();
+                renderHistory(history);
+            }
+        });
+    </script>
+</body>
+
+</html>

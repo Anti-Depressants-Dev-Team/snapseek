@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('snapseek', {
     getDownloadPath: () => ipcRenderer.invoke('get-download-path'),
     setDownloadPath: () => ipcRenderer.invoke('set-download-path'),
     openSettings: () => ipcRenderer.invoke('open-settings'),
+    openHistory: () => ipcRenderer.invoke('open-history'),
     closeSettings: () => ipcRenderer.invoke('close-settings'),
     onShowNavBar: (callback) => ipcRenderer.on('show-nav-bar', callback),
     onHideNavBar: (callback) => ipcRenderer.on('hide-nav-bar', callback),
@@ -20,5 +21,15 @@ contextBridge.exposeInMainWorld('snapseek', {
     toggleServiceState: (serviceName, state) => ipcRenderer.invoke('toggle-service-state', serviceName, state),
     getAllServices: () => ipcRenderer.invoke('get-all-services'),
     addCustomService: (serviceData) => ipcRenderer.invoke('add-custom-service', serviceData),
-    removeCustomService: (serviceId) => ipcRenderer.invoke('remove-custom-service', serviceId)
+    removeCustomService: (serviceId) => ipcRenderer.invoke('remove-custom-service', serviceId),
+    getDarkModeState: () => ipcRenderer.invoke('get-dark-mode-state'),
+    toggleDarkModeState: (state) => ipcRenderer.invoke('toggle-dark-mode-state', state),
+
+    // History & Folder
+    openDownloadsFolder: () => ipcRenderer.invoke('open-downloads-folder'),
+    getDownloadHistory: () => ipcRenderer.invoke('get-download-history'),
+    clearDownloadHistory: () => ipcRenderer.invoke('clear-download-history'),
+
+    // Services
+    updateServiceUrl: (serviceId, newUrl) => ipcRenderer.invoke('update-service-url', serviceId, newUrl)
 });
