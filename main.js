@@ -53,7 +53,7 @@ function createWindow() {
     frame: false // Custom Title Bar
   });
 
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, 'dist-ui', 'index.html'));
 
   // Remove menu bar for cleaner look
   mainWindow.setMenuBarVisibility(false);
@@ -98,20 +98,15 @@ function createBrowserView(url) {
   // Fix for anti-hotlinking: Inject Referer headers
   // Pinterest and Pixiv images often return 403 Forbidden if the Referer header is missing or incorrect
   currentView.webContents.session.webRequest.onBeforeSendHeaders(
-    { urls: ['*://*.pinimg.com/*', '*://*.pinterest.com/*', '*://*.pixiv.net/*', '*://*.pximg.net/*', '*://*.deviantart.com/*', '*://*.deviantart.net/*', '*://*.wixmp.com/*', '*://*.dauserusercontent.com/*'] },
+    { urls: ['*://*.pixiv.net/*', '*://*.pximg.net/*', '*://*.deviantart.com/*', '*://*.deviantart.net/*', '*://*.wixmp.com/*', '*://*.dauserusercontent.com/*'] },
     (details, callback) => {
       const { requestHeaders } = details;
       const url = new URL(details.url);
 
-      if (url.hostname.includes('pinterest') || url.hostname.includes('pinimg')) {
-        requestHeaders['Referer'] = 'https://www.pinterest.com/';
-        requestHeaders['Origin'] = 'https://www.pinterest.com';
-      } else if (url.hostname.includes('pixiv') || url.hostname.includes('pximg')) {
+      if (url.hostname.includes('pixiv') || url.hostname.includes('pximg')) {
         requestHeaders['Referer'] = 'https://www.pixiv.net/';
-        requestHeaders['Origin'] = 'https://www.pixiv.net';
-      } else if (url.hostname.includes('deviantart') || url.hostname.includes('wixmp') || url.hostname.includes('dauserusercontent')) { // Added dauserusercontent (Avatars/UGC)
+      } else if (url.hostname.includes('deviantart') || url.hostname.includes('wixmp') || url.hostname.includes('dauserusercontent')) {
         requestHeaders['Referer'] = 'https://www.deviantart.com/';
-        requestHeaders['Origin'] = 'https://www.deviantart.com';
       }
 
       callback({ requestHeaders });
@@ -158,20 +153,7 @@ function createBrowserView(url) {
 
   // Inject content script after page loads
   currentView.webContents.on('did-finish-load', () => {
-    // Nuclear option: Unregister all service workers to force fresh network requests
-    // SKIP FOR DEVIANTART: It relies heavily on SW and might break if we nuked it or if injection conflicts
-    if (!currentView.webContents.getURL().includes('deviantart')) {
-      currentView.webContents.executeJavaScript(`
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-                console.log('SnapSeek: Unregistering SW:', registration);
-                registration.unregister();
-            }
-            });
-        }
-        `);
-    }
+    // Service worker unregistration removed as it breaks modern SPAs like Pinterest
 
     // Inject Dark Reader first
     const darkReaderPath = path.join(__dirname, 'node_modules', 'darkreader', 'darkreader.js');
@@ -419,8 +401,18 @@ async function downloadImage(imageUrl, format = 'png') {
       counter++;
     }
 
-    // Download image
-    const response = await fetch(imageUrl);
+    // Fix for anti-hotlinking during manual download
+    const headers = {};
+    const urlObj = new URL(imageUrl);
+    if (urlObj.hostname.includes('pximg.net') || urlObj.hostname.includes('pixiv.net')) {
+      headers['Referer'] = 'https://www.pixiv.net/';
+    } else if (urlObj.hostname.includes('pinimg.com')) {
+      headers['Referer'] = 'https://www.pinterest.com/';
+    } else if (urlObj.hostname.includes('wixmp.com') || urlObj.hostname.includes('deviantart')) {
+      headers['Referer'] = 'https://www.deviantart.com/';
+    }
+
+    const response = await fetch(imageUrl, { headers });
     if (!response.ok) {
       throw new Error(`Failed to download image: ${response.statusText}`);
     }
@@ -504,17 +496,17 @@ ipcMain.handle('set-download-path', async () => {
 });
 
 ipcMain.handle('open-settings', () => {
-  mainWindow.loadFile('settings.html');
+  mainWindow.webContents.send('navigate', 'settings');
   closeBrowserView();
 });
 
 ipcMain.handle('open-history', () => {
-  mainWindow.loadFile('history.html');
+  mainWindow.webContents.send('navigate', 'history');
   closeBrowserView();
 });
 
 ipcMain.handle('close-settings', () => {
-  mainWindow.loadFile('index.html');
+  mainWindow.webContents.send('navigate', 'home');
 });
 
 // Service State Management
