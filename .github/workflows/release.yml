@@ -14,6 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]
 
@@ -33,13 +34,12 @@ jobs:
       - name: Build UI
         run: npm run build:ui
 
-      - name: Create Icons
+      - name: Create Windows Icon
+        if: matrix.os == 'windows-latest'
         run: npm run create-icon
 
       - name: Build and Release Electron App
         run: npx electron-builder --publish always
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # To skip macOS signing if no certificates are provided, 
-          # you might need: CSC_IDENTITY_AUTO_DISCOVERY: false
-          # But it's better to let it fail or warn if the user expects signing.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
