@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapSeek - Image Search</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="./assets/index-Cwjx6fK2.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DWEuwWvO.css">
+</head>
+
+<body>
+  <div id="app">
+    <!-- Custom Title Bar -->
+    <div id="title-bar" class="title-bar">
+      <div class="title-drag-region"></div>
+      <div class="title-left">
+        <div id="nav-controls" class="nav-controls hidden">
+          <button id="browser-back-btn" class="title-btn" title="Go Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M19 12H5M12 19L5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button id="back-btn" class="title-btn" title="Change Service">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" />
+              <polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+            Home
+          </button>
+        </div>
+      </div>
+
+      <div class="window-controls">
+        <button id="min-btn" class="control-btn minimize" title="Minimize">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button id="max-btn" class="control-btn maximize" title="Maximize">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="4" width="16" height="16" stroke="currentColor" stroke-width="2" rx="2" />
+          </svg>
+        </button>
+        <button id="close-btn" class="control-btn close" title="Close">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Dynamic Container -->
+    <div id="spa-container" class="spa-container blur-bg">
+
+      <!-- PAGE: HOME -->
+      <div id="view-home" class="view active">
+        <header class="header">
+          <div class="header-content">
+            <h1 class="app-title">SnapSeek</h1>
+            <p class="app-subtitle">Browse and download images beautifully.</p>
+          </div>
+          <div class="header-controls">
+            <button id="open-folder-btn" class="settings-button" title="Open Downloads Folder">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </button>
+            <button class="settings-button nav-link" data-target="history" title="Download History">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </button>
+            <button class="settings-button nav-link" data-target="settings" title="Settings">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <main class="services-grid" id="services-grid">
+          <!-- Dynamic Content Rendered via TS -->
+        </main>
+
+        <!-- Services Toggle Button -->
+        <div class="services-toggle-container">
+          <button id="services-toggle-btn" class="services-toggle-btn glass-btn" title="Manage Services">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            Manage Services
+          </button>
+
+          <div id="services-modal" class="services-modal hidden glass-panel">
+            <div class="services-modal-content" id="services-modal-content">
+              <h3>Manage Services</h3>
+              <!-- Dynamic list here -->
+            </div>
+          </div>
+
+          <div id="add-service-modal" class="services-modal hidden glass-panel">
+            <div class="services-modal-content" style="max-width: 400px;">
+              <h3>Add Custom Service</h3>
+              <form id="add-service-form" class="retro-form">
+                <div class="form-group">
+                  <label>Service Name</label>
+                  <input type="text" id="new-service-name" placeholder="E.g. DeviantArt" class="modal-input" required>
+                </div>
+                <div class="form-group">
+                  <label>Service URL</label>
+                  <input type="url" id="new-service-url" placeholder="https://..." class="modal-input" required>
+                </div>
+                <div class="form-group">
+                  <label>Icon URL (Optional)</label>
+                  <input type="url" id="new-service-icon" placeholder="https://.../favicon.ico" class="modal-input">
+                </div>
+                <div class="form-actions">
+                  <button type="button" id="add-service-cancel" class="cancel-btn">Cancel</button>
+                  <button type="submit" class="submit-btn primary-glow">Add Service</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: SETTINGS -->
+      <div id="view-settings" class="view hidden">
+        <div class="settings-container glass-panel">
+          <div class="settings-header">
+            <button class="back-button nav-link" data-target="home" title="Back to Home">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </button>
+            <h1 class="settings-title">Settings</h1>
+          </div>
+
+          <div class="settings-content">
+            <div class="setting-group glass-card">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <label class="setting-label">Dark Mode</label>
+                <label class="switch">
+                  <input type="checkbox" id="dark-mode-toggle">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+              <p class="setting-description">Enable automatic dark mode for all websites.</p>
+            </div>
+            <div class="setting-group glass-card">
+              <label class="setting-label">Download Directory</label>
+              <p class="setting-description">Choose where downloaded images will be saved.</p>
+              <div class="setting-value" id="current-path">Loading...</div>
+              <button id="change-path-btn" class="primary-button primary-glow">Choose Folder</button>
+            </div>
+
+            <div class="setting-group glass-card">
+              <label class="setting-label">About SnapSeek</label>
+              <p class="setting-description">
+                Version 2.0.0<br>
+                Modern image browser with premium UI.<br>
+                <br>
+                <strong>Features:</strong><br>
+                • Fast elegant browsing<br>
+                • Built-in ad blocker<br>
+                • Automatic format conversion<br>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE: HISTORY -->
+      <div id="view-history" class="view hidden">
+        <div class="settings-container glass-panel">
+          <div class="settings-header">
+            <button class="back-button nav-link" data-target="home" title="Back to Home">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div style="flex: 1;">
+              <h1 class="settings-title">History</h1>
+            </div>
+            <button id="clear-history-btn" class="back-button danger-btn" title="Clear History">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                  stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="settings-content">
+            <div id="history-list" class="history-list">
+              <div style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                No downloads yet.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

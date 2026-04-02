@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build UI
+        run: npm run build:ui
+
+      - name: Create Icons
+        run: npm run create-icon
+
+      - name: Build and Release Electron App
+        run: npx electron-builder --publish always
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # To skip macOS signing if no certificates are provided, 
+          # you might need: CSC_IDENTITY_AUTO_DISCOVERY: false
+          # But it's better to let it fail or warn if the user expects signing.

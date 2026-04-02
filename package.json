@@ -1,13 +1,15 @@
 {
   "name": "snapseek",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modern Electron app for browsing and downloading images from Pinterest, Safebooru, and Pixiv",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "npm run build:ui && electron .",
     "dev": "electron . --dev",
-    "build": "npm run create-icon && electron-builder",
-    "build:installer": "node create-icon.js && electron-builder --prepackaged=dist/win-unpacked --win nsis",
+    "dev:ui": "vite",
+    "build:ui": "tsc && vite build",
+    "build": "npm run build:ui && npm run create-icon && electron-builder",
+    "build:installer": "npm run build:ui && node create-icon.js && electron-builder --prepackaged=dist/win-unpacked --win nsis",
     "create-icon": "node create-icon.js"
   },
   "build": {
@@ -37,6 +39,21 @@
       "runAfterFinish": true,
       "menuCategory": false,
       "license": "LICENSE"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "logo.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "logo.png",
+      "category": "Utility"
     }
   },
   "keywords": [
@@ -53,7 +70,9 @@
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
     "png-to-ico": "^3.0.1",
-    "to-ico": "^1.1.5"
+    "to-ico": "^1.1.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.1"
   },
   "dependencies": {
     "@cliqz/adblocker-electron": "^1.26.0",

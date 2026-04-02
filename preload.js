@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('snapseek', {
     closeSettings: () => ipcRenderer.invoke('close-settings'),
     onShowNavBar: (callback) => ipcRenderer.on('show-nav-bar', callback),
     onHideNavBar: (callback) => ipcRenderer.on('hide-nav-bar', callback),
+    onNavigate: (callback) => ipcRenderer.on('navigate', callback),
     minimize: () => ipcRenderer.invoke('window-minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window-maximize'),
     close: () => ipcRenderer.invoke('window-close'),
