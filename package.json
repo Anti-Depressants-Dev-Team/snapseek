@@ -1,6 +1,6 @@
 {
   "name": "snapseek",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Modern Electron app for browsing and downloading images from Pinterest, Safebooru, and Pixiv",
   "main": "main.js",
   "scripts": {
