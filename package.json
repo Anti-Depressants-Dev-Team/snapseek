@@ -39,6 +39,21 @@
       "runAfterFinish": true,
       "menuCategory": false,
       "license": "LICENSE"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "logo.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "logo.png",
+      "category": "Utility"
     }
   },
   "keywords": [
