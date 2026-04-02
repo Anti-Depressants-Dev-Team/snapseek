@@ -64,8 +64,15 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+
       - name: Install Dependencies
         run: npm ci
+
+      - name: Rebuild Native Modules for Electron
+        run: npx electron-builder install-app-deps
 
       - name: Build UI
         run: npm run build:ui
@@ -79,3 +86,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+  publish:
+    needs: [tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = 'v${{ needs.tag.outputs.version }}';
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+            const release = releases.find(r => r.tag_name === version);
+            if (release && release.draft) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                draft: false,
+                name: `SnapSeek ${version}`,
+              });
+              console.log(`Published release ${version}`);
+            } else if (release) {
+              console.log(`Release ${version} is already published`);
+            } else {
+              console.log(`No release found for ${version}`);
+            }

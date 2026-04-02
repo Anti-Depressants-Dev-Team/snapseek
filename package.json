@@ -45,14 +45,14 @@
         "dmg",
         "zip"
       ],
-      "icon": "logo.png"
+      "icon": "icon.png"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "icon": "logo.png",
+      "icon": "icon.png",
       "category": "Utility"
     }
   },
