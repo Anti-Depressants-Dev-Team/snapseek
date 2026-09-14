@@ -42,6 +42,16 @@ class TranscodeResult(
 
 class UnsupportedImageException(message: String) : RuntimeException(message)
 
+/** The container an [OutputFormat] asks for; null for ORIGINAL, which keeps whatever came down the wire. */
+val OutputFormat.kind: ImageKind?
+    get() = when (this) {
+        OutputFormat.ORIGINAL -> null
+        OutputFormat.PNG -> ImageKind.PNG
+        OutputFormat.JPEG -> ImageKind.JPEG
+        OutputFormat.WEBP -> ImageKind.WEBP
+        OutputFormat.GIF -> ImageKind.GIF
+    }
+
 interface ImageTranscoder {
     /** [fallbackExtension] names files whose type can't be sniffed (videos saved as ORIGINAL, for example). */
     fun transcode(bytes: ByteArray, target: OutputFormat, fallbackExtension: String? = null): TranscodeResult
@@ -63,12 +73,7 @@ class ImageIoTranscoder : ImageTranscoder {
             throw UnsupportedImageException("The server did not return an image")
         }
 
-        val targetKind = when (target) {
-            OutputFormat.ORIGINAL -> sourceKind
-            OutputFormat.PNG -> ImageKind.PNG
-            OutputFormat.JPEG -> ImageKind.JPEG
-            OutputFormat.GIF -> ImageKind.GIF
-        }
+        val targetKind = target.kind ?: sourceKind
         if (targetKind == sourceKind) return TranscodeResult(bytes, sourceKind, copiedThrough = true)
 
         val decoded = ImageIO.read(ByteArrayInputStream(bytes))

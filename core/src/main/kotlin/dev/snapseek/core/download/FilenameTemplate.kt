@@ -76,7 +76,7 @@ class FilenameTemplate(private val clock: Clock = Clock.systemDefaultZone()) {
         const val DEFAULT_DATE = "yyyyMMdd-HHmmss"
         private val TOKEN = Regex("""\{([A-Za-z_][A-Za-z0-9_]*)(?::([^}]*))?\}""")
         private val MODIFIER = Regex("""_\([^)]*\)""")
-        private val LIST_TOKENS = setOf("tags", "artist", "character", "copyright", "general", "meta")
+        private val LIST_TOKENS = setOf("tags", "artist", "character", "copyright", "general", "meta", "species", "lore")
         private val ALIASES = mapOf("booru" to "service", "site" to "service", "ext" to "extension", "hash" to "sha256")
         private val DELIMITERS = mapOf(
             "comma" to ", ", "space" to " ", "underscore" to "_", "hyphen" to "-", "dot" to ".", "plus" to "+", "none" to "",
@@ -85,7 +85,7 @@ class FilenameTemplate(private val clock: Clock = Clock.systemDefaultZone()) {
         /** Every token name the UI can offer in a help text. */
         val KNOWN_TOKENS = listOf(
             "service", "date", "hash8", "hash", "md5", "original", "extension", "uuid",
-            "id", "tags", "artist", "character", "copyright", "general", "meta", "rating", "score", "width", "height", "source",
+            "id", "tags", "artist", "character", "copyright", "general", "meta", "species", "rating", "score", "width", "height", "source", "search",
         )
     }
 }

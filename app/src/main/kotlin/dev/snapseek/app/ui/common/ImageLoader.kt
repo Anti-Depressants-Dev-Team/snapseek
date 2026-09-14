@@ -2,7 +2,7 @@ package dev.snapseek.app.ui.common
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import dev.snapseek.core.download.ImageFetcher
+import dev.snapseek.core.booru.BooruHttp
 import dev.snapseek.core.sites.RefererPolicy
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
@@ -72,9 +72,11 @@ class ImageLoader(
     }
 
     private suspend fun download(url: String): ByteArray? {
+        // Booru CDNs sit behind the same bot checks as their APIs: a browser-like agent from a non-browser gets
+        // challenged, an honest app agent does not. This loader only ever fetches booru previews.
         val builder = HttpRequest.newBuilder(URI(url))
             .timeout(Duration.ofSeconds(40))
-            .header("User-Agent", ImageFetcher.DEFAULT_USER_AGENT)
+            .header("User-Agent", BooruHttp.APP_USER_AGENT)
             .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
         referers.refererForUrl(url)?.let { builder.header("Referer", it) }
         val response = http.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofByteArray()).await()

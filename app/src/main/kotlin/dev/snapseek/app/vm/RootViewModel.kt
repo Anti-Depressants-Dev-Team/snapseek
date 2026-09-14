@@ -4,7 +4,10 @@ import dev.snapseek.app.AppGraph
 import dev.snapseek.browser.BrowserTab
 import dev.snapseek.browser.EngineState
 import dev.snapseek.browser.TabEvent
+import dev.snapseek.core.booru.BooruHttp
 import dev.snapseek.core.download.DownloadRequest
+import dev.snapseek.core.model.Bookmark
+import dev.snapseek.core.model.OutputFormat
 import dev.snapseek.core.model.Service
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
@@ -17,6 +20,7 @@ sealed interface Screen {
     data object Home : Screen
     data object Settings : Screen
     data object History : Screen
+    data object Bookmarks : Screen
     data class Browser(val serviceId: String?) : Screen
     data class Booru(val serviceId: String) : Screen
 }
@@ -64,8 +68,30 @@ class RootViewModel(private val graph: AppGraph) {
     fun goHome() = show(Screen.Home)
     fun openSettings() = show(Screen.Settings)
     fun openHistory() = show(Screen.History)
+    fun openBookmarks() = show(Screen.Bookmarks)
     fun dismissNotice() {
         _notice.value = null
+    }
+
+    /** Saves a bookmarked post with the default format, keeping the booru template tokens it was saved with. */
+    fun saveBookmark(bookmark: Bookmark, format: OutputFormat? = null) {
+        graph.downloads.enqueue(
+            DownloadRequest(
+                imageUrl = bookmark.fileUrl,
+                pageUrl = bookmark.pageUrl,
+                format = if (bookmark.extension in setOf("webm", "mp4")) OutputFormat.ORIGINAL else format,
+                serviceId = bookmark.serviceId,
+                serviceName = bookmark.serviceName,
+                metadata = mapOf(
+                    "id" to bookmark.postId.toString(), "md5" to bookmark.hash, "tags" to bookmark.tags.joinToString(" "),
+                    "rating" to bookmark.rating, "width" to bookmark.width.toString(), "height" to bookmark.height.toString(),
+                    "source" to (bookmark.source ?: ""),
+                ),
+                resolve = false,
+                referer = graph.services.byId(bookmark.serviceId)?.url,
+                userAgent = BooruHttp.APP_USER_AGENT,
+            ),
+        )
     }
 
     fun shutdown() {
@@ -93,7 +119,7 @@ class RootViewModel(private val graph: AppGraph) {
             tab.events.collect { event ->
                 when (event) {
                     is TabEvent.SaveImage -> graph.downloads.enqueue(
-                        DownloadRequest(event.imageUrl, event.pageUrl, event.format, service?.id),
+                        DownloadRequest(event.imageUrl, event.pageUrl, event.format, service?.id, serviceName = service?.name),
                     )
                     is TabEvent.LoadFailed -> _notice.value = "Couldn't load ${event.url}: ${event.error}"
                     is TabEvent.LoadFinished -> _notice.value = null

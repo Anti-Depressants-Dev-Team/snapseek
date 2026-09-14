@@ -24,9 +24,21 @@ object UiIcons {
     val Menu: ImageVector by lazy { stroked("menu", "M3 12h18", "M3 6h18", "M3 18h18") }
     val Search: ImageVector by lazy { stroked("search", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16z", "M21 21l-4.35-4.35") }
     val Download: ImageVector by lazy { stroked("download", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3") }
+    val DownloadAll: ImageVector by lazy { stroked("download-all", "M12 2L2 7l10 5 10-5-10-5z", "M2 17l10 5 10-5", "M2 12l10 5 10-5") }
     val Copy: ImageVector by lazy { stroked("copy", "M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2z", "M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1") }
     val ExternalLink: ImageVector by lazy { stroked("external-link", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", "M15 3h6v6", "M10 14L21 3") }
     val Globe: ImageVector by lazy { stroked("globe", "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M2 12h20", "M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z") }
+    val Heart: ImageVector by lazy { stroked("heart", HEART) }
+    val HeartFilled: ImageVector by lazy { filled("heart-filled", HEART) }
+    val Bookmark: ImageVector by lazy { stroked("bookmark", "M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z") }
+    val Shield: ImageVector by lazy { stroked("shield", "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z") }
+    val ShieldCheck: ImageVector by lazy { stroked("shield-check", "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z", "M9 12l2 2 4-4") }
+    val Check: ImageVector by lazy { stroked("check", "M20 6L9 17l-5-5") }
+    val CheckCircle: ImageVector by lazy { stroked("check-circle", "M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4L12 14.01l-3-3") }
+    val Circle: ImageVector by lazy { stroked("circle", "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z") }
+    val Plus: ImageVector by lazy { stroked("plus", "M12 5v14", "M5 12h14") }
+    val Trash: ImageVector by lazy { stroked("trash", "M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2") }
+    val Key: ImageVector by lazy { stroked("key", "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 1 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4") }
     val Tool: ImageVector by lazy {
         stroked(
             "tool",
@@ -47,6 +59,8 @@ object UiIcons {
         stroked("history", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0-20 0", "M12 6v6l4 2")
     }
 
+    private const val HEART = "M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+
     private fun stroked(name: String, vararg paths: String): ImageVector =
         ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
             .apply {
@@ -56,6 +70,21 @@ object UiIcons {
                         stroke = SolidColor(Color.White),
                         strokeLineWidth = 2f,
                         strokeLineCap = StrokeCap.Round,
+                        strokeLineJoin = StrokeJoin.Round,
+                    )
+                }
+            }
+            .build()
+
+    private fun filled(name: String, vararg paths: String): ImageVector =
+        ImageVector.Builder(name = name, defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+            .apply {
+                paths.forEach { d ->
+                    addPath(
+                        pathData = PathParser().parsePathString(d).toNodes(),
+                        fill = SolidColor(Color.White),
+                        stroke = SolidColor(Color.White),
+                        strokeLineWidth = 2f,
                         strokeLineJoin = StrokeJoin.Round,
                     )
                 }

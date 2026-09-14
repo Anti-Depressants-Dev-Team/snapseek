@@ -65,16 +65,28 @@ class DownloadManager(
 
     fun clearFinished() = _jobs.update { m -> m.filterValues { it.isActive } }
 
+    /** Finished jobs of one bulk batch, so the batch can report how it went. */
+    fun jobsInBatch(batchId: String): List<DownloadJob> = _jobs.value.values.filter { it.request.batchId == batchId }
+
     private suspend fun run(r: DownloadRequest) {
         val started = _jobs.value[r.id]?.startedAt ?: Instant.now()
         try {
             val s = settings.current
+
+            if (s.skipDuplicates && r.expectedMd5 != null) {
+                history.findByMd5(r.expectedMd5)?.takeIf { it.file.exists() }?.let { existing ->
+                    set(DownloadJob.Duplicate(r, started, existing))
+                    return
+                }
+            }
+
             val source = (if (r.resolve) resolvers.firstNotNullOfOrNull { it.resolve(r.imageUrl, r.pageUrl) } else null)
-                ?: ImageSource(listOf(r.imageUrl), referer = r.referer)
+                ?: ImageSource(listOf(r.imageUrl), referer = r.referer, userAgent = r.userAgent)
             set(DownloadJob.Fetching(r, started, source.candidates.first()))
 
             val fetched = fetcher.fetch(source)
             val sha = fetched.bytes.sha256Hex()
+            val md5 = fetched.bytes.md5Hex()
             val existing = history.findBySha(sha)
             if (existing != null && s.skipDuplicates && existing.file.exists()) {
                 set(DownloadJob.Duplicate(r, started, existing))
@@ -85,15 +97,15 @@ class DownloadManager(
             val urlExtension = fetched.url.substringBefore('?').substringAfterLast('.', "").lowercase().takeIf { it.length in 2..5 && it.all(Char::isLetterOrDigit) }
             val out = transcoder.transcode(fetched.bytes, r.format ?: s.defaultFormat, urlExtension)
 
-            val metadata = metadataFor(r, fetched, sha, out)
+            val metadata = metadataFor(r, fetched, sha, md5, out)
             val template = r.template ?: if (r.metadata.containsKey("id")) s.booruFileNameTemplate else s.fileNameTemplate
-            val dir = Path.of(s.downloadDir).also { it.createDirectories() }
+            val dir = targetDir(r, s.downloadDir, s.subfolderPerService).also { it.createDirectories() }
             val file = namer.nextFree(dir, namer.fileName(template, metadata, out.extension))
             file.writeBytes(out.bytes)
             runCatching { Sidecar.write(file, s.sidecar, metadata, fetched.url, r.pageUrl) }
                 .onFailure { log.warn(it) { "Sidecar for ${file.fileName} failed" } }
 
-            history.record(NewHistoryEntry(file, fetched.url, r.pageUrl, sha, r.serviceId, out.bytes.size.toLong()))
+            history.record(NewHistoryEntry(file, fetched.url, r.pageUrl, sha, md5, r.serviceId, out.bytes.size.toLong()))
             set(DownloadJob.Saved(r, started, file, out.bytes.size.toLong(), out.copiedThrough))
             log.info { "Saved ${file.fileName} (${out.kind}, ${out.bytes.size} bytes${if (out.copiedThrough) ", copied through" else ""})" }
         } catch (e: CancellationException) {
@@ -104,7 +116,20 @@ class DownloadManager(
         }
     }
 
-    private fun metadataFor(r: DownloadRequest, fetched: FetchedImage, sha: String, out: TranscodeResult): Map<String, String> {
+    private fun targetDir(r: DownloadRequest, base: String, perService: Boolean): Path {
+        var dir = Path.of(base)
+        if (perService) {
+            val folder = (r.serviceName ?: r.serviceId)?.let(::folderName)
+            if (folder != null) dir = dir.resolve(folder)
+        }
+        r.subfolder?.let(::folderName)?.let { dir = dir.resolve(it) }
+        return dir
+    }
+
+    private fun folderName(raw: String): String? =
+        raw.replace(Regex("""[\\/:*?"<>|\p{Cntrl}]"""), "_").trim().trimEnd('.').take(80).takeIf { it.isNotBlank() }
+
+    private fun metadataFor(r: DownloadRequest, fetched: FetchedImage, sha: String, md5: String, out: TranscodeResult): Map<String, String> {
         val service = r.serviceId
             ?: RefererPolicy.hostOf(r.pageUrl)?.removePrefix("www.")?.substringBefore('.')
             ?: "image"
@@ -114,7 +139,7 @@ class DownloadManager(
             putIfAbsent("booru", service)
             put("sha256", sha)
             put("hash8", sha.take(8))
-            putIfAbsent("md5", fetched.bytes.md5Hex())
+            putIfAbsent("md5", md5)
             put("original", runCatching { URI(fetched.url).path.substringAfterLast('/').substringBeforeLast('.') }.getOrDefault(""))
             put("extension", out.extension)
             put("uuid", UUID.randomUUID().toString())

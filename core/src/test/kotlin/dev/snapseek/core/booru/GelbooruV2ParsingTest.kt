@@ -42,6 +42,7 @@ class GelbooruV2ParsingTest {
         assertEquals("https://safebooru.org/images/7/ffff.gif", gif.fileUrl)
         assertEquals("https://safebooru.org/thumbnails/7/thumbnail_ffff.jpg", gif.previewUrl)
         assertEquals(gif.fileUrl, gif.sampleUrl, "no sample means the sample is the file itself")
+        assertEquals("safe", gif.rating, "on Gelbooru forks the letter s means safe")
         assertTrue(gif.isAnimated)
         assertEquals(2f, gif.aspectRatio)
     }
@@ -51,7 +52,7 @@ class GelbooruV2ParsingTest {
         val posts = GelbooruV2Client.parsePosts(gelbooruJson, "https://gelbooru.com")
         assertEquals(1, posts.size)
         assertEquals("abcdefabcdefabcdefabcdefabcdefab", posts[0].md5)
-        assertEquals("", posts[0].sampleUrl.ifEmpty { "" })
+        assertEquals(posts[0].fileUrl, posts[0].sampleUrl)
         assertNull(posts[0].source)
     }
 
@@ -69,6 +70,21 @@ class GelbooruV2ParsingTest {
 
         val v2 = GelbooruV2Client.parseSuggestions("""[{"type":"tag","label":"hatsune miku","value":"hatsune_miku","post_count":"99","category":"character"}]""")
         assertEquals(TagSuggestion("hatsune_miku", 99, TagCategory.CHARACTER), v2.single())
+    }
+
+    @Test
+    fun `tag api parses json and the xml some forks return`() {
+        val json = GelbooruV2Client.parseTagApi("""{"@attributes":{"limit":2},"tag":[{"id":1,"name":"1girl","count":9,"type":0},{"id":2,"name":"wokada","count":3,"type":1}]}""")
+        assertEquals(TagCategory.GENERAL, json["1girl"])
+        assertEquals(TagCategory.ARTIST, json["wokada"])
+
+        val xml = GelbooruV2Client.parseTagApi(
+            """<?xml version="1.0" encoding="UTF-8"?><tags type="array"><tag type="1" count="1" name="shin_inoh" ambiguous="true" id="437"/>
+               <tag type="4" count="4" name="kirinji_himawari" ambiguous="false" id="504"/><tag type="0" count="1" name="agartha" ambiguous="false" id="607"/></tags>""",
+        )
+        assertEquals(TagCategory.ARTIST, xml["shin_inoh"])
+        assertEquals(TagCategory.CHARACTER, xml["kirinji_himawari"])
+        assertEquals(TagCategory.GENERAL, xml["agartha"])
     }
 
     @Test

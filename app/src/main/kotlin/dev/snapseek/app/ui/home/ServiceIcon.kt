@@ -21,15 +21,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.snapseek.core.model.Service
 
-/** Brand-tinted tile with the same glyphs the web UI drew, converted from their SVG path data. */
+/** Brand-tinted tile: the web UI's glyphs for the original sites, a lettered tile for boorus added later. */
 @Composable
 fun ServiceIcon(service: Service, size: Dp) {
-    val brand = brandColor(service.id)
+    val key = service.icon.takeIf { it != "default" && !it.startsWith("http") } ?: service.id
+    val brand = brandColor(key)
     Box(
         Modifier.size(size).background(brand.copy(alpha = 0.14f), RoundedCornerShape(size / 4)),
         contentAlignment = Alignment.Center,
     ) {
-        val vector = ServiceGlyphs.forId(service.id, brand)
+        val vector = ServiceGlyphs.forId(key, brand)
         if (vector != null) {
             Icon(vector, contentDescription = service.name, tint = Color.Unspecified, modifier = Modifier.size(size * 0.6f))
         } else {
@@ -42,7 +43,7 @@ fun ServiceIcon(service: Service, size: Dp) {
     }
 }
 
-private fun brandColor(id: String): Color = when (id) {
+private fun brandColor(key: String): Color = when (key) {
     "pinterest" -> Color(0xFFE60023)
     "pixiv" -> Color(0xFF0096FA)
     "deviantart" -> Color(0xFF05CC47)
@@ -50,6 +51,20 @@ private fun brandColor(id: String): Color = when (id) {
     "giphy" -> Color(0xFF00CCFF)
     "tenor" -> Color(0xFF2D93DD)
     "wallpapers" -> Color(0xFFA855F7)
+    "danbooru", "danbooru_safe" -> Color(0xFF0075F8)
+    "aibooru" -> Color(0xFF06B6D4)
+    "yandere" -> Color(0xFFF472B6)
+    "konachan" -> Color(0xFF818CF8)
+    "gelbooru" -> Color(0xFF006FFA)
+    "rule34" -> Color(0xFF86EFAC)
+    "tbib" -> Color(0xFF60A5FA)
+    "xbooru" -> Color(0xFF8B5CF6)
+    "hypnohub" -> Color(0xFFE879F9)
+    "realbooru" -> Color(0xFFF97316)
+    "e621" -> Color(0xFF3B82F6)
+    "derpibooru" -> Color(0xFF7C3AED)
+    "ponybooru" -> Color(0xFFEC4899)
+    "furbooru" -> Color(0xFF10B981)
     else -> Color(0xFFA698BA)
 }
 

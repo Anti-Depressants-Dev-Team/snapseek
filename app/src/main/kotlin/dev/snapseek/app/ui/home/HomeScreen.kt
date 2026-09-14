@@ -57,6 +57,7 @@ fun HomeScreen(
     engineState: EngineState,
     onBrowse: (String) -> Unit,
     onOpenWebsite: (String) -> Unit,
+    onOpenBookmarks: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onRetryEngine: () -> Unit,
@@ -84,6 +85,7 @@ fun HomeScreen(
                 IconButton(onClick = { Reveal.openFolder(Path.of(settings.downloadDir)) }) {
                     Icon(UiIcons.Folder, "Open downloads folder", tint = SnapSeekColors.TextMuted)
                 }
+                IconButton(onClick = onOpenBookmarks) { Icon(UiIcons.Bookmark, "Bookmarks", tint = SnapSeekColors.TextMuted) }
                 IconButton(onClick = onOpenHistory) { Icon(UiIcons.History, "Download history", tint = SnapSeekColors.TextMuted) }
                 IconButton(onClick = onOpenSettings) { Icon(UiIcons.Settings, "Settings", tint = SnapSeekColors.TextMuted) }
             }
@@ -123,13 +125,7 @@ fun HomeScreen(
     }
 
     if (manageOpen) {
-        ManageServicesDialog(
-            services = services,
-            onToggle = { id, enabled -> graph.services.setEnabled(id, enabled) },
-            onRemove = { id -> graph.services.removeCustom(id) },
-            onAdd = { name, url, icon, kind -> graph.services.addCustom(name, url, icon, kind) },
-            onDismiss = { manageOpen = false },
-        )
+        ManageServicesDialog(graph = graph, services = services, onDismiss = { manageOpen = false })
     }
 }
 
@@ -199,11 +195,19 @@ private fun ServiceCard(service: Service, ready: Boolean, onBrowse: () -> Unit, 
                 service.isBooru -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(service.host, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "TAG SEARCH",
+                        service.kind.label.uppercase(),
                         style = MaterialTheme.typography.labelSmall,
                         color = SnapSeekColors.PrimaryHover,
                         modifier = Modifier.background(SnapSeekColors.PrimaryContainer.copy(alpha = 0.5f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
                     )
+                    if (service.nsfw) {
+                        Text(
+                            "NSFW",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SnapSeekColors.Danger,
+                            modifier = Modifier.background(SnapSeekColors.Danger.copy(alpha = 0.15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
                 }
                 else -> Text(service.host, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

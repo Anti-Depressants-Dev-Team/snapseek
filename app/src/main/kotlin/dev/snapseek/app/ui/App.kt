@@ -14,6 +14,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.FrameWindowScope
 import dev.snapseek.app.AppGraph
+import dev.snapseek.app.ui.bookmarks.BookmarksScreen
 import dev.snapseek.app.ui.booru.BooruScreen
 import dev.snapseek.app.ui.browser.BrowserScreen
 import dev.snapseek.app.ui.history.HistoryScreen
@@ -51,6 +52,7 @@ fun FrameWindowScope.App(
                 is Screen.Booru -> booru?.service?.name
                 Screen.Settings -> "Settings"
                 Screen.History -> "History"
+                Screen.Bookmarks -> "Bookmarks"
                 else -> null
             },
             engineState = engineState,
@@ -92,11 +94,18 @@ fun FrameWindowScope.App(
                         LaunchedEffect(s) { root.goHome() }
                     }
                 }
+                Screen.Bookmarks -> BookmarksScreen(
+                    graph = graph,
+                    onBack = root::goHome,
+                    onOpenWeb = { url, serviceId -> root.openUrl(url, serviceId) },
+                    onSave = { root.saveBookmark(it) },
+                )
                 Screen.Home -> HomeScreen(
                     graph = graph,
                     engineState = engineState,
                     onBrowse = root::openService,
                     onOpenWebsite = root::openWebsite,
+                    onOpenBookmarks = root::openBookmarks,
                     onOpenHistory = root::openHistory,
                     onOpenSettings = root::openSettings,
                     onRetryEngine = root::startEngine,

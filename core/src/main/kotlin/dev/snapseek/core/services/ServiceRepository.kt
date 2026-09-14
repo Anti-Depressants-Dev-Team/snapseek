@@ -1,5 +1,6 @@
 package dev.snapseek.core.services
 
+import dev.snapseek.core.booru.BooruPreset
 import dev.snapseek.core.model.Service
 import dev.snapseek.core.model.ServiceKind
 import dev.snapseek.core.model.ServiceType
@@ -22,13 +23,19 @@ class ServiceRepository(private val store: SettingsStore) {
 
     fun byId(id: String): Service? = current.firstOrNull { it.id == id }
 
+    fun byUrl(url: String): Service? = current.firstOrNull { it.url.trimEnd('/').equals(url.trimEnd('/'), ignoreCase = true) }
+
     fun setEnabled(id: String, enabled: Boolean) = edit(id) { it.copy(enabled = enabled) }
 
     fun setUrl(id: String, url: String) = edit(id) { it.copy(url = url) }
 
     fun setKind(id: String, kind: ServiceKind) = edit(id) { it.copy(kind = kind) }
 
-    fun addCustom(name: String, url: String, iconUrl: String?, kind: ServiceKind = ServiceKind.WEB): Service {
+    fun setCredentials(id: String, login: String?, apiKey: String?) = edit(id) {
+        it.copy(login = login?.trim()?.ifEmpty { null }, apiKey = apiKey?.trim()?.ifEmpty { null })
+    }
+
+    fun addCustom(name: String, url: String, iconUrl: String?, kind: ServiceKind = ServiceKind.WEB, nsfw: Boolean = false): Service {
         val normalizedUrl = if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
         val service = Service(
             id = "custom_${System.currentTimeMillis()}",
@@ -37,9 +44,26 @@ class ServiceRepository(private val store: SettingsStore) {
             icon = iconUrl?.trim()?.takeIf { it.isNotEmpty() } ?: "default",
             type = ServiceType.CUSTOM,
             kind = kind,
+            nsfw = nsfw,
         )
         store.update { it.copy(services = it.services + service) }
         return service
+    }
+
+    /** Adds a known booru, or returns the existing service when it is already there. */
+    fun addPreset(preset: BooruPreset): Service {
+        byUrl(preset.url)?.let { return it }
+        val service = Service(
+            id = "preset_${preset.host.replace(Regex("[^a-z0-9]"), "_")}",
+            name = preset.name,
+            url = preset.url.trimEnd('/') + "/",
+            icon = preset.icon,
+            type = ServiceType.CUSTOM,
+            kind = preset.kind,
+            nsfw = preset.nsfw,
+        )
+        store.update { s -> if (s.services.any { it.id == service.id }) s else s.copy(services = s.services + service) }
+        return byId(service.id) ?: service
     }
 
     fun removeCustom(id: String) = store.update { s ->

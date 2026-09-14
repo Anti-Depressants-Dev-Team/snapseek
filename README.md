@@ -43,23 +43,39 @@ Build an installer for the current OS (Windows needs the WiX Toolset 3.x on the 
 - **Alt+click an image** to save it in your default format without a menu.
 - Pinterest thumbnails and Pixiv "master" renders are upgraded to the original file before saving. Downloads reuse the browser's login cookies.
 
-**Boorus (Safebooru built in; add gelbooru.com, rule34.xxx, tbib.org and other Gelbooru 0.2 sites as custom services)**
+**Boorus**
 
-Borrowed from [Boorusama](https://github.com/khoadng/Boorusama): boorus are browsed natively through their API instead of a web page.
+Borrowed from [Boorusama](https://github.com/khoadng/Boorusama): boorus are browsed natively through their API instead of a web page. Six API families are supported, which covers most sites out there:
 
-- Tag search with autocomplete, `-tag` exclusion, `rating:` and `sort:` metatags, and a recent-searches row.
-- Masonry grid with infinite scroll. Hover a post to save it in one click.
-- Post details: full-size preview, tags grouped and coloured by category (artist, copyright, character, general, meta), click a tag to search it, links to the post page and source.
+| Family | Sites | Notes |
+|---|---|---|
+| Gelbooru 0.2 | safebooru.org (built in), gelbooru.com, rule34.xxx, tbib.org, xbooru.com, hypnohub.net, realbooru.com | gelbooru.com wants an API key + user ID |
+| Danbooru | danbooru.donmai.us, safebooru.donmai.us (built in), aibooru.online | anonymous searches take two tags |
+| Moebooru | yande.re, konachan.com, konachan.net | |
+| e621 | e621.net, e926.net | |
+| Philomena | derpibooru.org, ponybooru.org, furbooru.org | comma-separated tags |
+| Szurubooru | self-hosted instances | username + token if the instance requires it |
+
+Home → Manage services → **Add a booru** lists these as one-click presets. **Add a website** takes any URL and has a **Detect** button that asks the site which API it speaks. Accounts and API keys are entered per site with the key icon.
+
+- Tag search with autocomplete, `-tag` exclusion, each site's metatags, and a recent-searches row.
+- Masonry grid with infinite scroll. Hover a post to save, bookmark or select it. Select several and save them together.
+- **Download everything** matching a search: choose a cap, quality, and whether to put the files in a folder named after the search. Blacklisted posts are skipped; posts you already saved are recognised by hash without re-downloading.
+- Post details: full-size preview, tags grouped and coloured by category (artist, copyright, character, species, general, meta, lore), click a tag to search it, links to the post page and source.
+- **Safe mode** (shield button) adds the site's safe-rating filter to every search.
+- **Bookmarks** keep posts for later across all boorus; they persist in SQLite along with download history.
 - Original vs. sample download quality, per post or as a default.
 - Blacklist rules with Boorusama semantics: one rule per line, `tag1 tag2` requires both, `-tag` requires absence.
-- Optional sidecar file next to each save: tags as `.txt` or all metadata as `.json`.
-- Keyboard: `Esc` closes details, `←` `→` step through posts, `S` saves.
+- Optional sidecar file next to each save: tags as `.txt` or all metadata as `.json`. Optional folder per site.
+- Keyboard in details: `Esc` closes, `←` `→` step through posts, `S` saves, `B` bookmarks.
 
-**File names** use Boorusama's token grammar. Web downloads default to `{service}_{date}_{hash8}`, booru downloads to `{booru}_{id}_{md5:maxlength=8}`. Tokens: `service date hash8 hash md5 original extension uuid` plus `id tags artist character copyright general meta rating score width height source` for boorus. Options: `maxlength=N`, `limit=N`, `delimiter=comma|space|underscore|…`, `nomod`, `case=lower|upper|title`, `format=…` (date), `pad_left=N`, `single_letter`. Example: `{character:nomod,limit=2,delimiter=comma} by {artist} - {md5:maxlength=8}`. Collisions get ` (2)`, ` (3)`.
+**Formats**: PNG, JPEG, WebP, GIF or the original bytes. WebP in and out goes through Skia, which Compose already ships.
+
+**File names** use Boorusama's token grammar. Web downloads default to `{service}_{date}_{hash8}`, booru downloads to `{booru}_{id}_{md5:maxlength=8}`. Tokens: `service date hash8 hash md5 original extension uuid` plus `id tags artist character copyright general meta species rating score width height source search` for boorus. Options: `maxlength=N`, `limit=N`, `delimiter=comma|space|underscore|…`, `nomod`, `case=lower|upper|title`, `format=…` (date), `pad_left=N`, `single_letter`. Example: `{character:nomod,limit=2,delimiter=comma} by {artist} - {md5:maxlength=8}`. Collisions get ` (2)`, ` (3)`.
 
 ## Status
 
-Phase 0 (spike) plus most of phase 1 and the Boorusama-inspired booru mode. Not yet done: persistent history with thumbnails (SQLite), WebP output (Skia transcoder), video preview for webm posts, bulk download of a whole search, edge-resize of the frameless window, macOS packaging, tabs.
+Phase 0 (spike), phase 1 and the Boorusama-inspired booru mode across six API families. Not yet done: history thumbnails, video preview for webm posts, edge-resize of the frameless window, macOS packaging, tabs, Zerochan/Sankaku/Hydrus clients.
 
 ## License
 

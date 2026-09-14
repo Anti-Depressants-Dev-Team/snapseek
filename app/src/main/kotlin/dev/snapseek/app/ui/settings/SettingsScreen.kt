@@ -81,8 +81,16 @@ fun SettingsScreen(graph: AppGraph, parentWindow: Window?, onBack: () -> Unit) {
                 ) { Text("Choose folder") }
             }
             SettingCard {
+                ToggleRow(
+                    title = "A folder per site",
+                    description = "Saves into Downloads\\Pinterest, Downloads\\Safebooru and so on instead of one flat folder.",
+                    checked = settings.subfolderPerService,
+                    onChange = { on -> edit { it.copy(subfolderPerService = on) } },
+                )
+            }
+            SettingCard {
                 Text("Default save format", style = MaterialTheme.typography.titleMedium, color = SnapSeekColors.TextMain)
-                Description("Used by Alt+click and the Save button. The right-click menu always offers every format. \"Original\" writes the file exactly as the site served it.")
+                Description("Used by Alt+click and the Save button. The right-click menu always offers every format. \"Original\" writes the file exactly as the site served it. WebP sources convert through Skia.")
                 Spacer(Modifier.height(10.dp))
                 ChipRow(OutputFormat.entries, settings.defaultFormat, { it.label }) { fmt -> edit { it.copy(defaultFormat = fmt) } }
             }
@@ -133,6 +141,14 @@ fun SettingsScreen(graph: AppGraph, parentWindow: Window?, onBack: () -> Unit) {
                 ChipRow(GridSize.entries, settings.gridSize, { it.label }) { g -> edit { it.copy(gridSize = g) } }
             }
             SettingCard {
+                ToggleRow(
+                    title = "Safe mode",
+                    description = "Adds each site's safe-rating filter to every booru search. Also togglable from the shield button on the search bar.",
+                    checked = settings.booruSafeMode,
+                    onChange = { on -> edit { it.copy(booruSafeMode = on) } },
+                )
+            }
+            SettingCard {
                 Text("Blacklisted tags", style = MaterialTheme.typography.titleMedium, color = SnapSeekColors.TextMain)
                 Description("One rule per line. A post is hidden when every tag on a line matches. Prefix a tag with - to require its absence, for example \"gore -parody\".")
                 Spacer(Modifier.height(10.dp))
@@ -170,7 +186,7 @@ fun SettingsScreen(graph: AppGraph, parentWindow: Window?, onBack: () -> Unit) {
             SectionLabel("About")
             SettingCard {
                 Text(
-                    "SnapSeek 2.0.0 (Kotlin rebuild)\nChromium via JCEF · Compose Multiplatform · Dark Reader (MIT)\nBooru browsing inspired by Boorusama\nData: ${graph.paths.dataDir}\nCache: ${graph.paths.cacheDir}",
+                    "SnapSeek 2.0.0 (Kotlin rebuild)\nChromium via JCEF · Compose Multiplatform · Skia · SQLite · Dark Reader (MIT)\nBooru browsing inspired by Boorusama: Gelbooru, Danbooru, Moebooru, e621, Philomena and Szurubooru APIs\nData: ${graph.paths.dataDir}\nCache: ${graph.paths.cacheDir}",
                     style = MaterialTheme.typography.bodySmall,
                     color = SnapSeekColors.TextMuted,
                 )

@@ -23,6 +23,8 @@ enum class GridSize(val label: String, val minColumnDp: Int) { SMALL("Small", 15
 @Serializable
 data class Settings(
     val downloadDir: String = AppPaths.systemDownloads.toString(),
+    /** Put each site's downloads in its own folder under the download folder. */
+    val subfolderPerService: Boolean = false,
     val darkMode: Boolean = true,
     val adBlock: Boolean = true,
     val defaultFormat: OutputFormat = OutputFormat.PNG,
@@ -34,7 +36,10 @@ data class Settings(
     val booruFileNameTemplate: String = "{booru}_{id}_{md5:maxlength=8}",
     val sidecar: SidecarFormat = SidecarFormat.OFF,
     val booruQuality: DownloadQuality = DownloadQuality.ORIGINAL,
+    val booruSafeMode: Boolean = false,
     val gridSize: GridSize = GridSize.MEDIUM,
+    /** Default cap for "download everything matching this search". */
+    val bulkMaxPosts: Int = 100,
     /** One rule per line; see TagBlacklist. */
     val blacklist: String = "",
     /** Recent booru searches, newest first, keyed by service id. */

@@ -10,6 +10,8 @@ import java.util.UUID
 data class ImageSource(
     val candidates: List<String>,
     val referer: String? = null,
+    /** null uses the browser-like default; booru downloads pass the app's own agent. */
+    val userAgent: String? = null,
 ) {
     init {
         require(candidates.isNotEmpty()) { "ImageSource needs at least one candidate URL" }
@@ -22,6 +24,8 @@ data class DownloadRequest(
     /** null means "use the default format from settings". */
     val format: OutputFormat? = null,
     val serviceId: String? = null,
+    /** Shown in folder names when downloads are sorted per site. */
+    val serviceName: String? = null,
     /** Extra template tokens (id, tags, rating, …). Booru downloads fill this; web downloads leave it empty. */
     val metadata: Map<String, String> = emptyMap(),
     /** File name template override; null uses the settings default for this kind of download. */
@@ -29,6 +33,13 @@ data class DownloadRequest(
     /** Run site resolvers to upgrade the URL. Off when the caller already chose exactly what to fetch. */
     val resolve: Boolean = true,
     val referer: String? = null,
+    val userAgent: String? = null,
+    /** Extra folder under the download folder, for example the search a bulk download came from. */
+    val subfolder: String? = null,
+    /** md5 the site claims for the original file; lets a duplicate be reported without downloading it. */
+    val expectedMd5: String? = null,
+    /** Groups requests that belong to one bulk download. */
+    val batchId: String? = null,
     val id: String = UUID.randomUUID().toString(),
 )
 

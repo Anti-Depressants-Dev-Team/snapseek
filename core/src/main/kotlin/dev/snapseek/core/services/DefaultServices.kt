@@ -4,7 +4,7 @@ import dev.snapseek.core.model.Service
 import dev.snapseek.core.model.ServiceKind
 import dev.snapseek.core.model.ServiceRegion
 
-/** The sites SnapSeek ships with. Same set and URLs as the Electron app, so existing users see nothing move. */
+/** The sites SnapSeek ships with. Same set and URLs as the Electron app plus Danbooru's safe mirror; more boorus are one click away in "Add a booru". */
 object DefaultServices {
     val pinterest = Service(
         id = "pinterest",
@@ -24,6 +24,7 @@ object DefaultServices {
     val all: List<Service> = listOf(
         pinterest,
         Service("safebooru", "Safebooru", "https://safebooru.org/", icon = "safebooru", kind = ServiceKind.GELBOORU_V2),
+        Service("danbooru_safe", "Safebooru (Danbooru)", "https://safebooru.donmai.us/", icon = "danbooru", kind = ServiceKind.DANBOORU),
         Service("pixiv", "Pixiv", "https://www.pixiv.net/", icon = "pixiv"),
         Service("deviantart", "DeviantArt", "https://www.deviantart.com/", icon = "deviantart"),
         Service("giphy", "Giphy", "https://giphy.com/", icon = "giphy"),

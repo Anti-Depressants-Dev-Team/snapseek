@@ -42,7 +42,7 @@ class ImageFetcher(
         var last: Exception? = null
         for (url in source.candidates) {
             try {
-                return@withContext fetchOne(url, source.referer)
+                return@withContext fetchOne(url, source.referer, source.userAgent ?: userAgent)
             } catch (e: IOException) {
                 last = e
             } catch (e: IllegalArgumentException) {
@@ -52,10 +52,10 @@ class ImageFetcher(
         throw last ?: IllegalStateException("No candidate URLs")
     }
 
-    private suspend fun fetchOne(url: String, referer: String?): FetchedImage {
+    private suspend fun fetchOne(url: String, referer: String?, agent: String): FetchedImage {
         val builder = HttpRequest.newBuilder(URI(url))
             .timeout(Duration.ofSeconds(90))
-            .header("User-Agent", userAgent)
+            .header("User-Agent", agent)
             .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
         (referer ?: referers.refererForUrl(url))?.let { builder.header("Referer", it) }
         cookies.cookieHeaderFor(url)?.let { builder.header("Cookie", it) }

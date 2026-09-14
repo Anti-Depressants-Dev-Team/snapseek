@@ -74,6 +74,7 @@ fun PostDetail(
     post: BooruPost,
     categories: Map<String, TagCategory>,
     showOriginal: Boolean,
+    bookmarked: Boolean,
     vm: BooruViewModel,
     graph: AppGraph,
     onOpenWeb: (String) -> Unit,
@@ -97,6 +98,7 @@ fun PostDetail(
                     Key.DirectionLeft -> { vm.previous(); true }
                     Key.DirectionRight -> { vm.next(); true }
                     Key.S -> { vm.save(post, quality = quality); true }
+                    Key.B -> { vm.toggleBookmark(post); true }
                     else -> false
                 }
             },
@@ -133,13 +135,22 @@ fun PostDetail(
                 Modifier.width(360.dp).fillMaxHeight().background(SnapSeekColors.Panel).verticalScroll(rememberScrollState()).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Column {
-                    Text("#${post.id}", style = MaterialTheme.typography.headlineSmall, color = SnapSeekColors.TextMain)
-                    Text(
-                        listOfNotNull("${post.width} × ${post.height}", post.extension.uppercase(), post.ratingLabel, post.score?.let { "★ $it" }).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = SnapSeekColors.TextMuted,
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("#${post.id}", style = MaterialTheme.typography.headlineSmall, color = SnapSeekColors.TextMain)
+                        Text(
+                            listOfNotNull("${post.width} × ${post.height}", post.extension.uppercase(), post.ratingLabel, post.score?.let { "★ $it" }).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = SnapSeekColors.TextMuted,
+                        )
+                    }
+                    IconButton(onClick = { vm.toggleBookmark(post) }) {
+                        Icon(
+                            if (bookmarked) UiIcons.HeartFilled else UiIcons.Heart,
+                            if (bookmarked) "Remove bookmark" else "Bookmark",
+                            tint = if (bookmarked) Color(0xFFF472B6) else SnapSeekColors.TextMuted,
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -206,7 +217,7 @@ fun PostDetail(
                 if (categories.isEmpty() && post.tags.isNotEmpty()) {
                     Text("Loading tag categories…", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted)
                 }
-                Text("Esc closes · ← → move · S saves", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted.copy(alpha = 0.6f))
+                Text("Esc closes · ← → move · S saves · B bookmarks", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted.copy(alpha = 0.6f))
             }
         }
     }
