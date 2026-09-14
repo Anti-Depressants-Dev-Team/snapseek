@@ -1,21 +1,26 @@
-# Dependencies
-node_modules/
-
-# Build output
-dist/
-out/
+# Gradle / Kotlin
+.gradle/
 build/
-dist-installer/
-
-# OS specific
-.DS_Store
-Thumbs.db
+.kotlin/
+out/
+*.class
+local.properties
 
 # IDE
-.vscode/
 .idea/
+*.iml
+.vscode/
 *.swp
 *.swo
 
-# Electron
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
+
+# Legacy Electron app (kept under legacy-electron/ until the Kotlin app reaches parity)
+legacy-electron/node_modules/
+legacy-electron/dist/
+legacy-electron/dist-installer/
