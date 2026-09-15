@@ -101,8 +101,9 @@ class PinterestClient(
             put("static_feed", false)
             if (bookmark != null) put("bookmarks", buildJsonArray { add(bookmark) })
         }
-        val (posts, next) = parseFeed(call("UserHomefeedResource", "/", options))
+        val (posts, next) = parseFeed(call("UserHomefeedResource", "/", options, handler = "www/index.js"))
         cursors.store("home", page + 1, next)
+        log.info { "Pinterest home feed page $page: ${posts.size} pins" }
         return posts
     }
 
@@ -118,7 +119,7 @@ class PinterestClient(
             put("prepend", false)
             if (bookmark != null) put("bookmarks", buildJsonArray { add(bookmark) })
         }
-        val (posts, next) = parseFeed(call("BoardFeedResource", boardUrl, options))
+        val (posts, next) = parseFeed(call("BoardFeedResource", boardUrl, options, handler = "www/[username]/[slug].js"))
         cursors.store("board|$boardId", page + 1, next)
         return posts
     }
@@ -143,46 +144,94 @@ class PinterestClient(
 
     override suspend fun account(forceRefresh: Boolean): RemoteAccount? {
         if (accountChecked && !forceRefresh) return cachedAccount
-        val session = session()
-        val found = if (!session.loggedIn) {
-            null
-        } else {
-            // Every resource response carries client_context.user for a logged-in session, so a cheap search
-            // doubles as "who am I". The settings resource and the home page are fallbacks.
-            runCatching { parseAccount(call("UserSettingsResource", "/settings/", buildJsonObject {})) }
-                .onFailure { log.debug(it) { "UserSettingsResource failed; asking a search response instead" } }
-                .getOrNull()
-                ?: runCatching {
-                    val options = buildJsonObject { put("query", "a"); put("scope", "pins"); put("rs", "typed") }
-                    parseAccount(call("BaseSearchResource", "/search/pins/?q=a", options))
-                }.onFailure { log.debug(it) { "Search-based account probe failed" } }.getOrNull()
-                ?: runCatching { parseAccountFromHtml(http.get("$root/", session.headers("/"), accept = "text/html,*/*;q=0.8")) }
-                    .onFailure { log.debug(it) { "Home page account parse failed" } }
-                    .getOrNull()
+        return when (val result = connect()) {
+            is ConnectResult.Connected -> result.account
+            is ConnectResult.Waiting -> null
+            is ConnectResult.Failed -> null
         }
-        cachedAccount = found
+    }
+
+    override fun forgetAccount() {
+        cachedAccount = null
+        accountChecked = false
+    }
+
+    /**
+     * Asks Pinterest who we are. Every resource response carries `client_context`: `is_authenticated` says whether
+     * the cookies we sent belong to somebody, and `client_context.user` is that somebody. A plain search is the
+     * cheapest call that answers both, and it works anonymously too, so one request separates "nobody logged in yet"
+     * from "logged in but Pinterest won't say who".
+     */
+    override suspend fun connect(): ConnectResult {
+        val session = session()
+        if (session.cookieCount == 0) {
+            return ConnectResult.Waiting.also { log.info { "No Pinterest cookies in the browser yet" } }
+        }
+        val body = try {
+            val options = buildJsonObject { put("query", "a"); put("scope", "pins"); put("rs", "typed") }
+            call("BaseSearchResource", "/search/pins/?q=a", options)
+        } catch (e: BooruHttpException) {
+            log.warn { "Pinterest account probe failed: HTTP ${e.status}" }
+            return ConnectResult.Failed("Pinterest answered HTTP ${e.status} when asked who is logged in")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "Pinterest account probe failed" }
+            return ConnectResult.Failed(e.message ?: "couldn't reach Pinterest")
+        }
+
+        parseAccount(body)?.let { return finish(it) }
+
+        val authenticated = (parseJson(body) as? JsonObject)?.obj("client_context")?.bool("is_authenticated") == true
+        if (!authenticated) {
+            cachedAccount = null
+            accountChecked = true
+            log.info { "Pinterest still sees an anonymous visitor (${session.cookieCount} browser cookies sent)" }
+            return ConnectResult.Waiting
+        }
+        // Authenticated but the search response withheld the profile: read it off the home page instead.
+        runCatching { parseAccountFromHtml(http.get("$root/", session.headers("/", "www/index.js"), accept = "text/html,*/*;q=0.8")) }
+            .onFailure { log.debug(it) { "Home page account parse failed" } }
+            .getOrNull()
+            ?.let { return finish(it) }
+        return ConnectResult.Failed("Pinterest says the session is signed in but wouldn't return the profile")
+    }
+
+    private fun finish(account: RemoteAccount): ConnectResult.Connected {
+        cachedAccount = account
         accountChecked = true
-        if (found != null) log.info { "Pinterest session belongs to @${found.username}" } else if (session.loggedIn) log.warn { "Pinterest session cookies present but no account could be read" }
-        return found
+        log.info { "Pinterest session belongs to @${account.username}" }
+        return ConnectResult.Connected(account)
     }
 
     override suspend fun collections(): List<RemoteCollection> {
         val me = account() ?: throw AccountException("Not connected to Pinterest. Log in on the website tab first.")
-        val options = buildJsonObject {
-            put("username", me.username)
-            put("page_size", 100)
-            put("privacy_filter", "all")
-            put("sort", "last_pinned_to")
-            put("field_set_key", "profile_grid_item")
-            put("filter_stories", false)
-            put("group_by", "visibility")
-            put("include_archived", false)
+        val sourceUrl = "/${me.username}/"
+        val all = mutableListOf<RemoteCollection>()
+        var bookmark: String? = null
+        // Boards come 25 at a time whatever page_size says once you pass a bookmark, so walk the pages.
+        for (page in 0 until 12) {
+            val options = buildJsonObject {
+                put("username", me.username)
+                put("page_size", 100)
+                put("privacy_filter", "all")
+                put("sort", "last_pinned_to")
+                put("field_set_key", "profile_grid_item")
+                put("filter_stories", false)
+                put("group_by", "visibility")
+                put("include_archived", false)
+                bookmark?.let { put("bookmarks", buildJsonArray { add(it) }) }
+            }
+            val body = call("BoardsResource", sourceUrl, options, handler = "www/[username].js")
+            all += parseBoards(body)
+            bookmark = nextBookmark(body) ?: break
         }
-        val boards = parseBoards(call("BoardsResource", "/${me.username}/", options))
+        val boards = all.distinctBy { it.id }
         boards.forEach { b ->
             boardNames[b.id] = b.name
             b.url?.let { boardUrls[b.id] = it }
         }
+        log.info { "Pinterest: ${boards.size} boards for @${me.username}" }
         return boards
     }
 
@@ -192,7 +241,7 @@ class PinterestClient(
             put("name", name.trim())
             put("privacy", "public")
         }
-        val body = postResource("BoardResource", "create", "/${me.username}/", options)
+        val body = postResource("BoardResource", "create", "/${me.username}/", options, handler = "www/[username].js")
         val data = (parseJson(body) as? JsonObject)?.obj("resource_response")?.obj("data")
             ?: throw AccountException(errorMessage(body) ?: "Pinterest didn't create the board")
         val board = boardFrom(data) ?: throw AccountException("Pinterest answered without a board id")
@@ -212,7 +261,7 @@ class PinterestClient(
             put("image_signature", post.md5)
         }
         val body = try {
-            postResource("RepinResource", "create", "/pin/${post.id}/", options)
+            postResource("RepinResource", "create", "/pin/${post.id}/", options, handler = "www/pin/[id].js")
         } catch (e: BooruHttpException) {
             throw AccountException(e.body?.let(::errorMessage) ?: "Pinterest refused the save (HTTP ${e.status})")
         }
@@ -223,55 +272,63 @@ class PinterestClient(
 
     // ---- plumbing --------------------------------------------------------------------------------------------
 
-    private class Session(val cookie: String, val csrf: String, val loggedIn: Boolean) {
-        fun headers(sourceUrl: String, root: String): Map<String, String> = mapOf(
+    private inner class Session(val cookie: String, val csrf: String, val cookieCount: Int) {
+        fun headers(sourceUrl: String, handler: String): Map<String, String> = mapOf(
             "Accept" to "application/json, text/javascript, */*, q=0.01",
             "Accept-Language" to "en-US,en;q=0.9",
-            "Referer" to "$root/",
+            "Referer" to "$root$sourceUrl",
             "Origin" to root,
             "X-Requested-With" to "XMLHttpRequest",
             "X-APP-VERSION" to "a89153f",
             "X-CSRFToken" to csrf,
             "X-Pinterest-AppState" to "active",
             "X-Pinterest-Source-Url" to sourceUrl,
-            "X-Pinterest-PWS-Handler" to "www/search/[scope].js",
+            "X-Pinterest-PWS-Handler" to handler,
             "Sec-Fetch-Dest" to "empty",
             "Sec-Fetch-Mode" to "cors",
             "Sec-Fetch-Site" to "same-origin",
             "Cookie" to cookie,
         )
-
-        fun headers(sourceUrl: String): Map<String, String> = headers(sourceUrl, rootFor)
-        lateinit var rootFor: String
     }
 
     private suspend fun session(): Session {
-        val browserCookies = runCatching { cookies?.cookieHeaderFor("$root/") }.getOrNull()
+        val browserCookies = runCatching { cookies?.cookieHeaderFor("$root/") }
+            .onFailure { log.debug(it) { "Couldn't read Pinterest cookies from the browser" } }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
         val csrfFromBrowser = browserCookies?.let { CSRF_COOKIE.find(it)?.groupValues?.get(1) }
         val csrf = csrfFromBrowser ?: anonymousCsrf
         val cookie = when {
-            browserCookies.isNullOrBlank() -> "csrftoken=$anonymousCsrf"
+            browserCookies == null -> "csrftoken=$anonymousCsrf"
             csrfFromBrowser != null -> browserCookies
             else -> "$browserCookies; csrftoken=$anonymousCsrf"
         }
-        val loggedIn = browserCookies?.let { it.contains("_pinterest_sess=") || it.contains("_auth=1") } ?: false
-        return Session(cookie, csrf, loggedIn).also { it.rootFor = root }
+        val count = browserCookies?.split(';')?.count { it.isNotBlank() } ?: 0
+        return Session(cookie, csrf, count)
     }
 
-    private suspend fun call(resource: String, sourceUrl: String, options: JsonObject): String {
+
+    private suspend fun call(resource: String, sourceUrl: String, options: JsonObject, handler: String = SEARCH_HANDLER): String {
         val data = buildJsonObject { put("options", options); put("context", buildJsonObject {}) }.toString()
         val url = "$root/resource/$resource/get/?source_url=${sourceUrl.urlEncoded()}&data=${data.urlEncoded()}"
-        return http.get(url, session().headers(sourceUrl))
+        return http.get(url, session().headers(sourceUrl, handler))
     }
 
-    private suspend fun postResource(resource: String, action: String, sourceUrl: String, options: JsonObject): String {
+    private suspend fun postResource(
+        resource: String,
+        action: String,
+        sourceUrl: String,
+        options: JsonObject,
+        handler: String = SEARCH_HANDLER,
+    ): String {
         val data = buildJsonObject { put("options", options); put("context", buildJsonObject {}) }.toString()
         val form = "source_url=${sourceUrl.urlEncoded()}&data=${data.urlEncoded()}"
-        return http.post("$root/resource/$resource/$action/", form, session().headers(sourceUrl))
+        return http.post("$root/resource/$resource/$action/", form, session().headers(sourceUrl, handler))
     }
 
     companion object {
         const val BOARD_PREFIX = "board:"
+        private const val SEARCH_HANDLER = "www/search/[scope].js"
         private val CSRF_COOKIE = Regex("""(?:^|;\s*)csrftoken=([^;]+)""")
 
         /** Returns the pins and the bookmark for the next page, or null when the feed is exhausted. */
@@ -285,10 +342,15 @@ class PinterestClient(
                 else -> JsonArray(emptyList())
             }
             val posts = results.mapNotNull { (it as? JsonObject)?.let(::pinFrom) }
+            return posts to nextBookmark(body)
+        }
+
+        /** The paging token Pinterest echoes back, or null when that feed has no more pages. */
+        fun nextBookmark(body: String): String? {
+            val rootObj = parseJson(body) as? JsonObject ?: return null
             val bookmark = rootObj.obj("resource")?.obj("options")?.arr("bookmarks")?.firstOrNull()?.let { (it as? JsonPrimitive)?.contentOrNull }
-                ?: response.str("bookmark")
-            val next = bookmark?.takeIf { it.isNotBlank() && it != "-end-" && !it.startsWith("Y2JOb25lO") }
-            return posts to next
+                ?: rootObj.obj("resource_response")?.str("bookmark")
+            return bookmark?.takeIf { it.isNotBlank() && it != "-end-" && !it.startsWith("Y2JOb25lO") }
         }
 
         @Deprecated("Renamed", ReplaceWith("parseFeed(body)"))
@@ -386,7 +448,7 @@ class PinterestClient(
 
         private fun accountFrom(o: JsonObject): RemoteAccount? {
             val username = o.str("username")?.takeIf { it.isNotBlank() } ?: return null
-            val id = o.str("id") ?: return null
+            val id = o.str("id") ?: username
             return RemoteAccount(
                 id = id,
                 username = username,

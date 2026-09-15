@@ -4,6 +4,7 @@ import dev.snapseek.core.booru.AccountCapable
 import dev.snapseek.core.booru.BooruClient
 import dev.snapseek.core.booru.BooruHttp
 import dev.snapseek.core.booru.BooruPost
+import dev.snapseek.core.booru.ConnectResult
 import dev.snapseek.core.booru.MissingCredentialsException
 import dev.snapseek.core.booru.RemoteAccount
 import dev.snapseek.core.booru.RemoteCollection
@@ -108,31 +109,78 @@ class BooruViewModel(
     /** Short-lived feedback ("Saved to Inspo"), clears itself after a few seconds. */
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private val _connectHint = MutableStateFlow<String?>(null)
+    /** Why the account isn't connected, when the site gave a reason worth showing. */
+    val connectHint: StateFlow<String?> = _connectHint.asStateFlow()
+
     fun refreshAccount(force: Boolean = false) {
         val ac = accountClient ?: return
         scope.launch {
             _accountBusy.value = true
-            val found = runCatching { ac.account(force) }.onFailure { log.warn(it) { "Account check failed on ${service.name}" } }.getOrNull()
-            val wasConnected = _account.value != null
-            _account.value = found
+            if (force) ac.forgetAccount()
+            val result = runCatching { if (force) ac.connect() else ac.account()?.let { ConnectResult.Connected(it) } ?: ConnectResult.Waiting }
+                .getOrElse { failure ->
+                    if (failure is CancellationException) throw failure
+                    log.warn(failure) { "Account check failed on ${service.name}" }
+                    ConnectResult.Failed(failure.message ?: "couldn't reach ${service.name}")
+                }
             _accountBusy.value = false
-            if (found != null) {
-                loadCollections()
-                // The empty search is the personal feed once logged in; load it if the grid is still empty.
-                val s = _state.value
-                if (!wasConnected && s.activeTags.isEmpty() && s.posts.isEmpty() && !s.loading) search("")
-            } else {
+            applyConnectResult(result)
+        }
+    }
+
+    /** Called by the connect flow when the login it was watching succeeded, and by [refreshAccount]. */
+    fun applyConnectResult(result: ConnectResult) {
+        val wasConnected = _account.value != null
+        when (result) {
+            is ConnectResult.Connected -> {
+                val changed = _account.value?.id != result.account.id
+                _account.value = result.account
+                _connectHint.value = null
+                if (changed || _collections.value.isEmpty()) loadCollections()
+                // The empty search is the personal feed once logged in, so load it the moment we know who we are.
+                if (!wasConnected) {
+                    notice("Connected as @${result.account.username}")
+                    if (_state.value.activeTags.isEmpty()) search("")
+                }
+            }
+            is ConnectResult.Waiting -> {
+                _account.value = null
                 _collections.value = emptyList()
+                _connectHint.value = null
+                if (!searchedOnce) search("")
+            }
+            is ConnectResult.Failed -> {
+                _account.value = null
+                _collections.value = emptyList()
+                _connectHint.value = result.reason
+                log.warn { "${service.name} account: ${result.reason}" }
+                if (!searchedOnce) search("")
             }
         }
+    }
+
+    /** One poll of the login the connect flow opened. */
+    suspend fun probeConnection(): ConnectResult {
+        val ac = accountClient ?: return ConnectResult.Waiting
+        ac.forgetAccount()
+        return runCatching { ac.connect() }
+            .getOrElse { failure ->
+                if (failure is CancellationException) throw failure
+                ConnectResult.Failed(failure.message ?: "couldn't reach ${service.name}")
+            }
     }
 
     fun loadCollections() {
         val ac = accountClient ?: return
         scope.launch {
             _collections.value = runCatching { ac.collections() }
-                .onFailure { log.warn(it) { "Couldn't list ${ac.collectionNoun}s on ${service.name}" }; notice("Couldn't load your ${ac.collectionNoun}s: ${it.message}") }
-                .getOrDefault(emptyList())
+                .getOrElse { failure ->
+                    if (failure is CancellationException) throw failure
+                    log.warn(failure) { "Couldn't list ${ac.collectionNoun}s on ${service.name}" }
+                    notice("Couldn't load your ${ac.collectionNoun}s: ${failure.message}")
+                    emptyList()
+                }
             if (_lastCollection.value == null) _lastCollection.value = _collections.value.firstOrNull()
         }
     }
@@ -153,7 +201,11 @@ class BooruViewModel(
             for (post in posts) {
                 runCatching { ac.saveTo(post, collection) }
                     .onSuccess { ok++ }
-                    .onFailure { lastError = it.message; log.warn(it) { "Save to ${collection.name} failed for ${post.id}" } }
+                    .onFailure {
+                        if (it is CancellationException) throw it
+                        lastError = it.message
+                        log.warn(it) { "Save to ${collection.name} failed for ${post.id}" }
+                    }
             }
             notice(
                 when {
@@ -203,13 +255,15 @@ class BooruViewModel(
         get() = client.joinQuery(_state.value.activeTags + if (_state.value.safeMode) client.safeModeTags else emptyList())
 
     private var page = 0
+    private var searchedOnce = false
     private var loadJob: Job? = null
     private var suggestJob: Job? = null
     private var categoriesJob: Job? = null
 
     init {
-        search("")
-        refreshAccount()
+        // On a site with accounts the first grid depends on who we are (the home feed), so ask that first and let
+        // the answer start the search. Two searches racing here used to leave the grid empty on a cold start.
+        if (accountClient != null) refreshAccount() else search("")
     }
 
     // ---- searching -------------------------------------------------------------------------------------------
@@ -247,6 +301,7 @@ class BooruViewModel(
 
     fun search(query: String = _state.value.queryText) {
         val tags = client.splitQuery(query).distinct()
+        searchedOnce = true
         loadJob?.cancel()
         page = 0
         val needsQuery = tags.isEmpty() && !client.supportsEmptyQuery

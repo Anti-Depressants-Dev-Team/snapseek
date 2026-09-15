@@ -44,6 +44,7 @@ fun FrameWindowScope.App(
     val engineState by graph.engine.state.collectAsState()
     val jobs by graph.downloads.jobs.collectAsState()
     val notice by root.notice.collectAsState()
+    val login by root.login.collectAsState()
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TitleBar(
@@ -77,6 +78,8 @@ fun FrameWindowScope.App(
                                 tabState = tabState ?: TabState(),
                                 jobs = jobs,
                                 notice = notice,
+                                login = login,
+                                onEndLogin = root::endLogin,
                                 onDismissNotice = root::dismissNotice,
                                 onDismissJob = graph.downloads::dismiss,
                                 onClearFinished = graph.downloads::clearFinished,
@@ -89,7 +92,14 @@ fun FrameWindowScope.App(
                 is Screen.Booru -> {
                     val vm = booru
                     if (vm != null) {
-                        key(vm) { BooruScreen(vm = vm, graph = graph, onOpenWeb = { url -> root.openUrl(url, vm.service.id) }) }
+                        key(vm) {
+                            BooruScreen(
+                                vm = vm,
+                                graph = graph,
+                                onOpenWeb = { url -> root.openUrl(url, vm.service.id) },
+                                onConnectAccount = root::connectAccount,
+                            )
+                        }
                     } else {
                         LaunchedEffect(s) { root.goHome() }
                     }

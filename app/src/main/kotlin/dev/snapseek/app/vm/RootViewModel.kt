@@ -5,15 +5,19 @@ import dev.snapseek.browser.BrowserTab
 import dev.snapseek.browser.EngineState
 import dev.snapseek.browser.TabEvent
 import dev.snapseek.core.booru.BooruHttp
+import dev.snapseek.core.booru.ConnectResult
 import dev.snapseek.core.download.DownloadRequest
 import dev.snapseek.core.model.Bookmark
 import dev.snapseek.core.model.OutputFormat
 import dev.snapseek.core.model.Service
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 sealed interface Screen {
@@ -24,6 +28,18 @@ sealed interface Screen {
     data class Browser(val serviceId: String?) : Screen
     data class Booru(val serviceId: String) : Screen
 }
+
+/**
+ * The login the app is waiting for: the website tab is showing the site's sign-in page and the native screen
+ * behind it is parked, waiting for the session to appear.
+ */
+data class LoginFlow(
+    val serviceId: String,
+    val serviceName: String,
+    val checking: Boolean = false,
+    /** Set when the site answered something that isn't "still nobody", so the user isn't left guessing. */
+    val problem: String? = null,
+)
 
 /** Which screen is showing, plus the one open browser tab or booru session (phase 3 makes these lists). */
 class RootViewModel(private val graph: AppGraph) {
@@ -42,7 +58,11 @@ class RootViewModel(private val graph: AppGraph) {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private val _login = MutableStateFlow<LoginFlow?>(null)
+    val login: StateFlow<LoginFlow?> = _login.asStateFlow()
+
     private var eventsJob: Job? = null
+    private var loginJob: Job? = null
 
     fun startEngine() {
         scope.launch { graph.engine.start(graph.engineConfig) }
@@ -73,6 +93,73 @@ class RootViewModel(private val graph: AppGraph) {
         _notice.value = null
     }
 
+    // ---- connecting an account -------------------------------------------------------------------------------
+
+    /**
+     * Shows the site's sign-in page in the website tab while keeping the native screen alive behind it, and asks
+     * the site every couple of seconds whether the session has appeared. The moment it has, we close the login
+     * page, go back to the native screen and load the personal feed. No "press Home and come back" any more.
+     */
+    fun connectAccount() {
+        val vm = _booru.value ?: return
+        val ac = vm.accountClient ?: return
+        if (graph.engine.state.value !is EngineState.Ready) {
+            _notice.value = "The browser runtime is still starting; try again in a moment."
+            return
+        }
+        openWeb(vm.service, ac.loginUrl, keepBooru = true)
+        _login.value = LoginFlow(vm.service.id, vm.service.name)
+        log.info { "Waiting for a ${vm.service.name} login at ${ac.loginUrl}" }
+        loginJob = scope.launch {
+            var attempt = 0
+            while (isActive) {
+                delay(if (attempt < 5) 2_000 else 5_000)
+                attempt++
+                _login.update { it?.copy(checking = true) }
+                val result = vm.probeConnection()
+                _login.update { it?.copy(checking = false) }
+                when (result) {
+                    is ConnectResult.Connected -> {
+                        finishLogin(vm, result)
+                        return@launch
+                    }
+                    is ConnectResult.Failed -> {
+                        if (_login.value?.problem != result.reason) log.warn { "Login check #$attempt: ${result.reason}" }
+                        _login.update { it?.copy(problem = result.reason) }
+                    }
+                    is ConnectResult.Waiting -> {
+                        log.info { "Login check #$attempt: nobody signed in yet on ${vm.service.name}" }
+                        _login.update { it?.copy(problem = null) }
+                    }
+                }
+            }
+        }
+    }
+
+    /** "I'm done" / "Back to the grid": stop watching, close the login page, check once more on the way back. */
+    fun endLogin() {
+        val vm = _booru.value
+        stopWatchingLogin()
+        // Show the native screen before the tab goes away, so the browser screen never renders without its tab.
+        _screen.value = if (vm != null) Screen.Booru(vm.service.id) else Screen.Home
+        closeTab()
+        vm?.refreshAccount(force = true)
+    }
+
+    private fun finishLogin(vm: BooruViewModel, result: ConnectResult.Connected) {
+        stopWatchingLogin()
+        _screen.value = Screen.Booru(vm.service.id)
+        closeTab()
+        vm.applyConnectResult(result)
+        log.info { "Connected to ${vm.service.name} as @${result.account.username}" }
+    }
+
+    private fun stopWatchingLogin() {
+        loginJob?.cancel()
+        loginJob = null
+        _login.value = null
+    }
+
     /** Saves a bookmarked post with the default format, keeping the booru template tokens it was saved with. */
     fun saveBookmark(bookmark: Bookmark, format: OutputFormat? = null) {
         graph.downloads.enqueue(
@@ -95,11 +182,13 @@ class RootViewModel(private val graph: AppGraph) {
     }
 
     fun shutdown() {
+        stopWatchingLogin()
         closeTab()
         closeBooru()
     }
 
     private fun openBooru(service: Service) {
+        stopWatchingLogin()
         closeTab()
         closeBooru()
         _booru.value = graph.booruViewModel(service)
@@ -107,13 +196,14 @@ class RootViewModel(private val graph: AppGraph) {
         log.info { "Opened ${service.name} natively (${service.kind})" }
     }
 
-    private fun openWeb(service: Service?, url: String) {
+    private fun openWeb(service: Service?, url: String, keepBooru: Boolean = false) {
         if (graph.engine.state.value !is EngineState.Ready) {
             _notice.value = "The browser runtime is still starting."
             return
         }
+        if (!keepBooru) stopWatchingLogin()
         closeTab()
-        closeBooru()
+        if (!keepBooru) closeBooru()
         val tab = graph.engine.createTab(url)
         eventsJob = scope.launch {
             tab.events.collect { event ->
@@ -132,6 +222,7 @@ class RootViewModel(private val graph: AppGraph) {
     }
 
     private fun show(screen: Screen) {
+        stopWatchingLogin()
         closeTab()
         closeBooru()
         _screen.value = screen

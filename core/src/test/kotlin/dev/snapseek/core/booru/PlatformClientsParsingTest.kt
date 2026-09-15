@@ -65,6 +65,20 @@ class PlatformClientsParsingTest {
     }
 
     @Test
+    fun `an anonymous pinterest visitor is not mistaken for an account`() {
+        // What the live site answers with no session: client_context.user exists but holds only an anonymous id.
+        val anonymous = """{"resource_response":{"data":{"results":[]}},"client_context":{"is_authenticated":false,"unauth_id":"5187ebc4","user":{"unauth_id":"5187ebc4","ip_country":"RO","ip_region":"IF"}}}"""
+        assertNull(PinterestClient.parseAccount(anonymous))
+        assertNull(PinterestClient.parseAccountFromHtml("""<html><script type="application/json">{"context":{"user":{"unauth_id":"5187ebc4"}}}</script></html>"""))
+
+        // Paging tokens: a real one continues, the two "nothing left" spellings stop.
+        assertEquals("LT4xNDI1", PinterestClient.nextBookmark("""{"resource":{"options":{"bookmarks":["LT4xNDI1"]}}}"""))
+        assertNull(PinterestClient.nextBookmark("""{"resource":{"options":{"bookmarks":["-end-"]}}}"""))
+        assertNull(PinterestClient.nextBookmark("""{"resource":{"options":{"bookmarks":["Y2JOb25lO2Vz"]}}}"""))
+        assertNull(PinterestClient.nextBookmark("""{"resource_response":{"status":"success"}}"""))
+    }
+
+    @Test
     fun `pixiv search and ranking map thumbnails to master renders`() {
         val search = """
             {"error":false,"body":{"illustManga":{"data":[

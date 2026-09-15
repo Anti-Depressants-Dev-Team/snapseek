@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -40,6 +41,9 @@ class JcefEngine(
     override val state: StateFlow<EngineState> = _state.asStateFlow()
 
     private val scripts = PageScripts()
+
+    @Volatile
+    private var primer: org.cef.browser.CefBrowser? = null
 
     @Volatile
     private var app: CefApp? = null
@@ -78,6 +82,7 @@ class JcefEngine(
                 })
 
                 app = builder.build()
+                wakeChromium()
                 _state.value = EngineState.Ready
                 log.info { "CEF ready (install dir: ${config.installDir})" }
             } catch (e: Exception) {
@@ -87,29 +92,65 @@ class JcefEngine(
         }
     }
 
+    /**
+     * JCEF keeps Chromium asleep until something opens a page, and while it sleeps its cookie store answers
+     * nothing at all — which made a perfectly good Pinterest or Pixiv login look like "not signed in" on any
+     * screen that never opened a tab. One throwaway blank browser wakes it, off-screen and never shown.
+     */
+    private fun wakeChromium() {
+        val cef = app ?: return
+        if (primer != null) return
+        runCatching {
+            javax.swing.SwingUtilities.invokeAndWait {
+                val client = cef.createClient()
+                primer = client.createBrowser("about:blank", false, false).also { it.getUIComponent() }
+            }
+            log.info { "Chromium awake; browser logins are readable" }
+        }.onFailure { log.warn(it) { "Couldn't wake Chromium for cookie access" } }
+    }
+
     override fun createTab(initialUrl: String): BrowserTab {
         val cef = checkNotNull(app) { "Browser engine is not running" }
         return JcefTab(cef.createClient(), initialUrl, referers, blocklist, settings, scripts)
     }
 
-    /** Joins the browser session's cookies for [url] into one Cookie header. Returns null when there are none. */
+    /**
+     * Joins the browser session's cookies for [url] into one Cookie header, http-only ones included, which is
+     * what makes a logged-in session usable. Returns null when there are none.
+     *
+     * CEF visits cookies one callback at a time and never says "that was the last one" when there are zero, so
+     * we collect into a shared list and take whatever arrived when the visit stops calling back.
+     */
     override suspend fun cookieHeaderFor(url: String): String? {
-        if (app == null) return null
+        if (app == null) {
+            // A native screen can open before Chromium has finished starting; wait rather than report "no login".
+            val ready = withTimeoutOrNull(20_000) { state.first { it is EngineState.Ready || it is EngineState.Failed } }
+            if (ready !is EngineState.Ready || app == null) return null
+        }
         val manager = CefCookieManager.getGlobalManager() ?: return null
-        return withTimeoutOrNull(1500) {
+        val parts = java.util.concurrent.ConcurrentHashMap<String, String>()
+        val order = java.util.concurrent.ConcurrentLinkedQueue<String>()
+        val done = withTimeoutOrNull(2000) {
             suspendCancellableCoroutine { cont ->
-                val parts = mutableListOf<String>()
                 val visitor = CefCookieVisitor { cookie, count, total, _ ->
-                    parts += "${cookie.name}=${cookie.value}"
-                    if (count == total - 1 && cont.isActive) cont.resume(parts.joinToString("; "))
+                    val name = cookie.name.orEmpty()
+                    val value = cookie.value.orEmpty()
+                    if (name.isNotEmpty()) {
+                        if (parts.put(name, value) == null) order += name
+                    }
+                    if (count >= total - 1 && cont.isActive) cont.resume(true)
                     true
                 }
-                if (!manager.visitUrlCookies(url, true, visitor) && cont.isActive) cont.resume(null)
+                if (!manager.visitUrlCookies(url, true, visitor) && cont.isActive) cont.resume(false)
             }
-        }?.takeIf { it.isNotEmpty() }
+        }
+        if (done == false) log.debug { "CEF refused to visit cookies for $url" }
+        return order.joinToString("; ") { "$it=${parts[it]}" }.takeIf { it.isNotEmpty() }
     }
 
     override fun shutdown() {
+        runCatching { primer?.close(true) }
+        primer = null
         app?.dispose()
         app = null
     }

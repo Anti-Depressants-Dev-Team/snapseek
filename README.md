@@ -53,7 +53,9 @@ Every site on the home screen opens as a native grid: a search box, previews, on
 
 Reddit is missing on purpose: it no longer answers anonymous JSON requests.
 
-**Your Pinterest account.** Press **Connect account** on the Pinterest screen: the website tab opens on Pinterest's login page. Sign in there once (the embedded Chromium keeps the session), press Home, open Pinterest again, and the native screen now shows your **home feed** when the search box is empty, lists **your boards** under the account chip, and offers **Save to board** on every pin (details panel, the multi-select bar, or `P` for your last board). New boards can be created from the same menu. Nothing is stored by SnapSeek beyond the browser's own cookies; log out on the website tab to disconnect.
+**Your Pinterest account.** Open Pinterest and it checks the embedded browser's session straight away: if you are already signed in, the account chip shows your name and the grid opens on your **home feed**, with no extra steps. If not, press **Connect account**, sign in on the page that opens, and the app brings you back the moment the session appears, feed and boards loaded. There is a **Back to Pinterest** button on that page too, for when you would rather return yourself.
+
+Once connected, the account chip lists **your boards** (browse any of them in the grid) and every pin offers **Save to board** from the details panel, the multi-select bar, or `P` for your last board. New boards can be created from the same menu. Nothing is stored by SnapSeek beyond the browser's own cookies; log out on the website tab to disconnect.
 
 **Boorus**
 

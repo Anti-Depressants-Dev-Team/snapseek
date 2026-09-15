@@ -24,6 +24,8 @@ import javax.swing.UIManager
  * Flags (all optional):
  *   --open <serviceId>   open a service as soon as the app is ready (handy for smoke tests)
  *   --search <query>     with --open on a native service: run this search right away
+ *   --url <url>          open this page in the embedded browser as soon as it is ready
+ *   --connect <serviceId> open a service natively and go straight into its "connect account" login flow
  */
 fun main(args: Array<String>) {
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info")
@@ -33,6 +35,25 @@ fun main(args: Array<String>) {
     val graph = AppGraph.create()
     val root = RootViewModel(graph)
     root.startEngine()
+
+    args.indexOf("--connect").takeIf { it >= 0 && it + 1 < args.size }?.let { i ->
+        val serviceId = args[i + 1]
+        graph.scope.launch {
+            graph.engine.state.first { it is EngineState.Ready }
+            withContext(Dispatchers.Swing) {
+                root.openService(serviceId)
+                root.connectAccount()
+            }
+        }
+    }
+
+    args.indexOf("--url").takeIf { it >= 0 && it + 1 < args.size }?.let { i ->
+        val url = args[i + 1]
+        graph.scope.launch {
+            graph.engine.state.first { it is EngineState.Ready }
+            withContext(Dispatchers.Swing) { root.openUrl(url) }
+        }
+    }
 
     args.indexOf("--open").takeIf { it >= 0 && it + 1 < args.size }?.let { i ->
         val serviceId = args[i + 1]

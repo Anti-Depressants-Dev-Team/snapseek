@@ -90,7 +90,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 /** Native booru browsing: tag search with suggestions, masonry grid, selection, bulk download, and a detail view. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit) {
+fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit, onConnectAccount: () -> Unit = {}) {
     val state by vm.state.collectAsState()
     val history by vm.history.collectAsState()
     val bookmarked by vm.bookmarked.collectAsState()
@@ -101,6 +101,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
     val collections by vm.collections.collectAsState()
     val accountBusy by vm.accountBusy.collectAsState()
     val notice by vm.notice.collectAsState()
+    val connectHint by vm.connectHint.collectAsState()
     val gridState = rememberLazyStaggeredGridState()
     var bulkDialog by remember { mutableStateOf(false) }
     var saveMenu by remember { mutableStateOf(false) }
@@ -186,7 +187,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                         busy = accountBusy,
                         collections = collections,
                         collectionNoun = vm.accountClient.collectionNoun,
-                        onConnect = { onOpenWeb(vm.accountClient.loginUrl) },
+                        onConnect = onConnectAccount,
                         onHomeFeed = { vm.search("") },
                         onOpenCollection = vm::openCollection,
                         onRefresh = { vm.refreshAccount(force = true) },
@@ -312,7 +313,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                             if (state.error != null) TextButton(onClick = { vm.loadMore() }) { Text("Retry") }
                             if (vm.accountClient != null && account == null && emptySearch) {
                                 Button(
-                                    onClick = { onOpenWeb(vm.accountClient.loginUrl) },
+                                    onClick = onConnectAccount,
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = SnapSeekColors.Primary, contentColor = Color.White),
                                 ) {
@@ -325,9 +326,9 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                         }
                         if (vm.accountClient != null && account == null && emptySearch) {
                             Text(
-                                "Log in on the website tab that opens, then press Home and come back here.",
+                                connectHint ?: "The sign-in page opens here; the moment you're in, this comes back with your feed.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = SnapSeekColors.TextMuted,
+                                color = if (connectHint != null) SnapSeekColors.Danger else SnapSeekColors.TextMuted,
                                 textAlign = TextAlign.Center,
                             )
                         }
