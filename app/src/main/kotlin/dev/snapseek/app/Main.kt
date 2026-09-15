@@ -18,7 +18,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.swing.Swing
 import kotlinx.coroutines.withContext
+import io.github.oshai.kotlinlogging.KotlinLogging
 import javax.swing.UIManager
+import kotlin.io.path.createDirectories
+import kotlin.io.path.exists
+import kotlin.io.path.moveTo
 
 /**
  * Flags (all optional):
@@ -26,10 +30,11 @@ import javax.swing.UIManager
  *   --search <query>     with --open on a native service: run this search right away
  *   --url <url>          open this page in the embedded browser as soon as it is ready
  *   --connect <serviceId> open a service natively and go straight into its "connect account" login flow
+ *   --console            log to the console instead of the log file
+ *   --debug              log everything, not just the highlights
  */
 fun main(args: Array<String>) {
-    System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info")
-    System.setProperty("org.slf4j.simpleLogger.showDateTime", "true")
+    startLogging(args)
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
 
     val graph = AppGraph.create()
@@ -103,5 +108,32 @@ fun main(args: Array<String>) {
                 )
             }
         }
+    }
+}
+
+/**
+ * A packaged build has no console to print to, so the log goes to a file next to the app's data, kept from the
+ * last two runs. `--console` keeps it on screen instead, which is what a run from Gradle wants.
+ */
+private fun startLogging(args: Array<String>) {
+    System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", if (args.contains("--debug")) "debug" else "info")
+    System.setProperty("org.slf4j.simpleLogger.showDateTime", "true")
+    System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd HH:mm:ss")
+    if (args.contains("--console")) return
+    runCatching {
+        val logDir = dev.snapseek.core.settings.AppPaths.forCurrentOs().logDir
+        logDir.createDirectories()
+        val current = logDir.resolve("snapseek.log")
+        val previous = logDir.resolve("snapseek.previous.log")
+        if (current.exists()) current.moveTo(previous, overwrite = true)
+        System.setProperty("org.slf4j.simpleLogger.logFile", current.toAbsolutePath().toString())
+        println("Logging to $current")
+    }.onFailure { println("Logging to the console; the log file could not be opened: ${it.message}") }
+
+    // Without this a crash on a background thread leaves nothing behind but a closed window.
+    val existing = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+        runCatching { KotlinLogging.logger("dev.snapseek.crash").error(error) { "Uncaught on ${thread.name}" } }
+        existing?.uncaughtException(thread, error)
     }
 }
