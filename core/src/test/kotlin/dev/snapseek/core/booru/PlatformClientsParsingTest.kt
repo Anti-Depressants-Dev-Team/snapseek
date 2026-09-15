@@ -68,13 +68,22 @@ class PlatformClientsParsingTest {
 
     @Test
     fun `pixiv reads the account, its bookmark tags and its feeds`() {
-        // Pixiv hands a signed-in browser its viewer and CSRF token in one HTML-escaped meta tag.
-        val html = """<html><head><meta name="global-data" id="meta-global-data" content="{&quot;token&quot;:&quot;abc123&quot;,&quot;userData&quot;:{&quot;id&quot;:&quot;9876&quot;,&quot;pixivId&quot;:&quot;yabosen&quot;,&quot;name&quot;:&quot;Yabo&quot;,&quot;profileImg&quot;:&quot;https://i.pximg.net/u.jpg&quot;}}"/></head></html>"""
-        val data = PixivClient.globalData(html)!!
-        assertEquals("abc123", data.str("token"))
-        assertEquals(RemoteAccount("9876", "yabosen", "Yabo", "https://i.pximg.net/u.jpg"), PixivClient.accountFrom(data))
-        // Signed out there is no such tag, which is how "nobody is logged in" is told apart from a broken read.
-        assertNull(PixivClient.globalData("<html><head><title>pixiv</title></head></html>"))
+        // The older markup: viewer and token in one HTML-escaped meta tag.
+        val meta = """<html><head><meta name="global-data" id="meta-global-data" content="{&quot;token&quot;:&quot;abc1230000000000&quot;,&quot;userData&quot;:{&quot;id&quot;:&quot;9876&quot;,&quot;pixivId&quot;:&quot;yabosen&quot;,&quot;name&quot;:&quot;Yabo&quot;,&quot;profileImg&quot;:&quot;https://i.pximg.net/u.jpg&quot;}}"/></head></html>"""
+        assertEquals(RemoteAccount("9876", "Yabo", "yabosen", "https://i.pximg.net/u.jpg"), PixivClient.accountFromPage(meta))
+
+        // What the live site serves today: a Next.js page whose payload is escaped JSON, viewer one level deeper
+        // under "self", with a CSS class called "self-end" nearby to make sure that isn't mistaken for it.
+        val next = """<div class="self-end mt-[-2px]">See all</div><script>self.__next_f.push([1,"{\"api\":{\"token\":\"4753b9f1d89eb53fa99fb0b0725c2c4f\",\"services\":{}},\"userData\":{\"pAbDId\":683278748,\"self\":{\"id\":\"103418701\",\"pixivId\":\"user_xfdj2327\",\"name\":\"N3XTSLVT\",\"profileImg\":\"https://i.pximg.net/u_50.jpg\",\"profileImgBig\":\"https://i.pximg.net/u_170.jpg\",\"premium\":false,\"xRestrict\":2}}}"])</script>"""
+        assertEquals("4753b9f1d89eb53fa99fb0b0725c2c4f", PixivClient.csrfFrom(next))
+        val me = PixivClient.accountFromPage(next)!!
+        assertEquals("103418701", me.id)
+        assertEquals("N3XTSLVT", me.username)
+        assertEquals("https://i.pximg.net/u_170.jpg", me.avatarUrl)
+
+        // Signed out neither is there, which is how "nobody is logged in" stays separate from a broken read.
+        assertNull(PixivClient.accountFromPage("<html><head><title>pixiv</title></head></html>"))
+        assertNull(PixivClient.csrfFrom("<html><body>no token here</body></html>"))
 
         val tags = PixivClient.parseBookmarkTags("""{"error":false,"body":{"public":[{"tag":"景色","cnt":12},{"tag":"未分類","cnt":3}],"private":[{"tag":"secret","cnt":1}]}}""")
         assertEquals(listOf("景色", "secret"), tags.map { it.name })

@@ -144,9 +144,8 @@ class PixivClient(
             log.warn(e) { "Pixiv account probe failed" }
             return ConnectResult.Failed(e.message ?: "couldn't reach Pixiv")
         }
-        val data = globalData(html)
-        data?.str("token")?.takeIf { it.isNotBlank() }?.let { csrfToken = it }
-        val account = data?.let(::accountFrom) ?: fromSessionCookie(cookie)
+        csrfFrom(html)?.let { csrfToken = it }
+        val account = accountFromPage(html) ?: fromSessionCookie(cookie)
         if (account == null) {
             log.info { "Pixiv is still serving the signed-out page (${cookie.split(';').size} browser cookies sent)" }
             return ConnectResult.Waiting
@@ -155,6 +154,20 @@ class PixivClient(
         accountChecked = true
         log.info { "Pixiv session belongs to ${account.username} (id ${account.id})" }
         return ConnectResult.Connected(account)
+    }
+
+    /**
+     * The token every write needs. It rides along on any signed-in page, so if the connect probe didn't catch one
+     * (the page layout changes now and then) fetching a page again is enough, rather than asking for a reconnect.
+     */
+    private suspend fun csrf(): String? {
+        csrfToken?.let { return it }
+        val found = runCatching {
+            csrfFrom(http.get("$root/", headers() + ("Accept" to "text/html,*/*;q=0.8"), accept = "text/html,*/*;q=0.8"))
+        }.onFailure { log.warn(it) { "Couldn't fetch a Pixiv page for the token" } }.getOrNull()
+        if (found == null) log.warn { "No CSRF token on the Pixiv page; is the browser still signed in?" }
+        csrfToken = found
+        return found
     }
 
     /**
@@ -198,7 +211,7 @@ class PixivClient(
 
     override suspend fun saveTo(post: BooruPost, collection: RemoteCollection) {
         account() ?: throw AccountException("Connect your Pixiv account first.")
-        val token = csrfToken ?: throw AccountException("Pixiv didn't hand over a CSRF token; reconnect the account")
+        val token = csrf() ?: throw AccountException("Pixiv wouldn't hand over the token a bookmark needs. Open Pixiv's website once and try again.")
         val payload = buildJsonObject {
             put("illust_id", post.id.toString())
             put("restrict", if (collection.isPrivate) 1 else 0)
@@ -238,22 +251,70 @@ class PixivClient(
 
         private val GLOBAL_DATA = Regex("""<meta[^>]*id="meta-global-data"[^>]*content="([^"]*)"""")
 
+        private const val SELF_KEY = "\"self\":"
+
+        private val CSRF_TOKEN = Regex("""\\*"token\\*":\\*"([0-9a-f]{16,64})""")
+
         /** The JSON Pixiv embeds for a signed-in browser: the viewer, the CSRF token, premium flags. */
         fun globalData(html: String): JsonObject? {
             val raw = GLOBAL_DATA.find(html)?.groupValues?.get(1) ?: return null
             return parseJson(raw.unescapeHtml()) as? JsonObject
         }
 
-        fun accountFrom(globalData: JsonObject): RemoteAccount? {
-            val user = globalData.obj("userData") ?: return null
-            val id = user.str("id")?.takeIf { it.isNotBlank() } ?: return null
-            val name = user.str("pixivId")?.takeIf { it.isNotBlank() } ?: user.str("name")?.takeIf { it.isNotBlank() } ?: id
+        /**
+         * The token writes are signed with. Pixiv used to hand it over in a meta tag and now buries it in the
+         * page's data payload, escaped once or twice depending on the page, so match it wherever it turns up.
+         */
+        fun csrfFrom(html: String): String? = CSRF_TOKEN.find(html)?.groupValues?.get(1)
+
+        /**
+         * Who the page belongs to. The viewer sits under `userData`, these days one level further down in `self`,
+         * and the payload may be escaped, so unescape first and read the innermost object that has an id.
+         */
+        fun accountFromPage(html: String): RemoteAccount? {
+            globalData(html)?.let { data -> accountFrom(data.obj("userData")?.obj("self") ?: data.obj("userData")) }?.let { return it }
+            val plain = html.replace("\\\"", "\"")
+            var from = 0
+            while (true) {
+                val start = plain.indexOf(SELF_KEY, from).takeIf { it >= 0 } ?: return null
+                val brace = plain.indexOf('{', start + SELF_KEY.length - 1).takeIf { it >= 0 } ?: return null
+                val obj = balancedObject(plain, brace)?.let { parseJson(it) as? JsonObject }
+                accountFrom(obj)?.let { return it }
+                from = start + SELF_KEY.length
+            }
+        }
+
+        fun accountFrom(user: JsonObject?): RemoteAccount? {
+            val id = user?.str("id")?.takeIf { it.isNotBlank() && it.all(Char::isDigit) } ?: return null
+            val name = user.str("name")?.takeIf { it.isNotBlank() } ?: user.str("pixivId")?.takeIf { it.isNotBlank() } ?: id
             return RemoteAccount(
                 id = id,
                 username = name,
-                displayName = user.str("name")?.takeIf { it.isNotBlank() && it != name },
+                displayName = user.str("pixivId")?.takeIf { it.isNotBlank() && it != name },
                 avatarUrl = user.str("profileImgBig") ?: user.str("profileImg"),
             )
+        }
+
+        /** The `{…}` starting at [open], respecting nesting and quotes, or null when it never closes. */
+        private fun balancedObject(text: String, open: Int): String? {
+            var depth = 0
+            var inString = false
+            var escaped = false
+            for (i in open until minOf(text.length, open + 20_000)) {
+                val c = text[i]
+                when {
+                    escaped -> escaped = false
+                    c == '\\' && inString -> escaped = true
+                    c == '"' -> inString = !inString
+                    inString -> Unit
+                    c == '{' -> depth++
+                    c == '}' -> {
+                        depth--
+                        if (depth == 0) return text.substring(open, i + 1)
+                    }
+                }
+            }
+            return null
         }
 
         /** {"body":{"public":[{"tag":"景色","cnt":12}],"private":[…]}} — private tags come back marked secret. */
