@@ -1,8 +1,6 @@
 package dev.snapseek.core.booru
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.future.await
-import kotlinx.coroutines.withContext
+import dev.snapseek.core.net.Http
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -13,62 +11,44 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
-import java.io.ByteArrayInputStream
 import java.net.URI
 import java.net.URLEncoder
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 import java.util.Base64
-import java.util.zip.GZIPInputStream
 
 /**
- * One JDK HttpClient shared by every site client, with the headers sites care about.
+ * The headers every site client sends, on top of the shared [Http].
  * The default user agent names the app on purpose: Danbooru's Cloudflare front challenges browser-like agents that
  * don't come from a browser, and e621 rejects generic ones outright. An honest agent passes both.
  * Sites that only talk to browsers (Pinterest, Pixiv) get a browser agent explicitly.
  */
 class BooruHttp(
     private val userAgent: String = APP_USER_AGENT,
-    private val timeout: Duration = Duration.ofSeconds(30),
+    private val timeoutMillis: Int = 30_000,
 ) {
-    private val client: HttpClient = HttpClient.newBuilder()
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .connectTimeout(Duration.ofSeconds(15))
-        .build()
-
     suspend fun get(url: String, headers: Map<String, String> = emptyMap(), accept: String = "application/json, */*;q=0.5"): String =
-        send(url, headers, accept) { it.GET() }
+        send(url, "GET", headers, accept, null)
 
     /** Form-encoded POST. Non-2xx answers still surface their body through [BooruHttpException.body], since sites explain failures there. */
     suspend fun post(url: String, form: String, headers: Map<String, String> = emptyMap(), accept: String = "application/json, */*;q=0.5"): String =
-        send(url, headers + ("Content-Type" to (headers["Content-Type"] ?: "application/x-www-form-urlencoded; charset=UTF-8")), accept) {
-            it.POST(HttpRequest.BodyPublishers.ofString(form))
-        }
+        send(
+            url,
+            "POST",
+            headers + ("Content-Type" to (headers["Content-Type"] ?: "application/x-www-form-urlencoded; charset=UTF-8")),
+            accept,
+            form.toByteArray(Charsets.UTF_8),
+        )
 
-    private suspend fun send(url: String, headers: Map<String, String>, accept: String, method: (HttpRequest.Builder) -> HttpRequest.Builder): String =
-        withContext(Dispatchers.IO) {
-            val builder = HttpRequest.newBuilder(URI(url))
-                .timeout(timeout)
-                .header("User-Agent", userAgent)
-                .header("Accept", headers["Accept"] ?: accept)
-                .header("Accept-Encoding", "gzip")
-            headers.filterKeys { !it.equals("Accept", ignoreCase = true) }.forEach { (k, v) -> builder.header(k, v) }
-            val response = client.sendAsync(method(builder).build(), HttpResponse.BodyHandlers.ofByteArray()).await()
-            val bytes = response.body()
-            val encoding = response.headers().firstValue("Content-Encoding").orElse("")
-            val decoded = if (encoding.contains("gzip", ignoreCase = true) || bytes.isGzip()) {
-                GZIPInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
-            } else {
-                bytes
-            }
-            val text = decoded.toString(Charsets.UTF_8)
-            if (response.statusCode() !in 200..299) throw BooruHttpException(url, response.statusCode(), text)
-            text
+    private suspend fun send(url: String, method: String, headers: Map<String, String>, accept: String, body: ByteArray?): String {
+        val all = buildMap {
+            put("User-Agent", userAgent)
+            put("Accept", headers["Accept"] ?: accept)
+            headers.forEach { (name, value) -> if (!name.equals("Accept", ignoreCase = true)) put(name, value) }
         }
-
-    private fun ByteArray.isGzip() = size >= 2 && this[0] == 0x1f.toByte() && this[1] == 0x8b.toByte()
+        val result = Http.request(url, method, all, body, readTimeoutMs = timeoutMillis)
+        val text = result.text()
+        if (!result.ok) throw BooruHttpException(url, result.status, text)
+        return text
+    }
 
     companion object {
         const val APP_USER_AGENT = "SnapSeek/2.0 (desktop image saver; github.com/Yabosen/snapseek)"

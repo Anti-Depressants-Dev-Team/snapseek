@@ -106,7 +106,7 @@ object BooruPresets {
 }
 
 /** Works out which API a URL speaks: known hosts first, then by asking the site for one post, cheapest checks first. */
-class BooruDetector(private val http: BooruHttp = BooruHttp(timeout = java.time.Duration.ofSeconds(10))) {
+class BooruDetector(private val http: BooruHttp = BooruHttp(timeoutMillis = 10_000)) {
     private val log = KotlinLogging.logger {}
 
     suspend fun detect(rawUrl: String): ServiceKind? {

@@ -1,14 +1,10 @@
 package dev.snapseek.core.download
 
+import dev.snapseek.core.net.Http
 import dev.snapseek.core.sites.RefererPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 
 /** Something that can hand us the browser session's cookies for a URL. The browser engine implements this. */
 interface CookieSource {
@@ -33,11 +29,6 @@ class ImageFetcher(
     private val referers: RefererPolicy,
     private val userAgent: String = DEFAULT_USER_AGENT,
 ) {
-    private val client: HttpClient = HttpClient.newBuilder()
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .connectTimeout(Duration.ofSeconds(20))
-        .build()
-
     suspend fun fetch(source: ImageSource): FetchedImage = withContext(Dispatchers.IO) {
         var last: Exception? = null
         for (url in source.candidates) {
@@ -53,21 +44,19 @@ class ImageFetcher(
     }
 
     private suspend fun fetchOne(url: String, referer: String?, agent: String): FetchedImage {
-        val builder = HttpRequest.newBuilder(URI(url))
-            .timeout(Duration.ofSeconds(90))
-            .header("User-Agent", agent)
-            .header("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
-        (referer ?: referers.refererForUrl(url))?.let { builder.header("Referer", it) }
-        cookies.cookieHeaderFor(url)?.let { builder.header("Cookie", it) }
+        val headers = buildMap {
+            put("User-Agent", agent)
+            put("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+            (referer ?: referers.refererForUrl(url))?.let { put("Referer", it) }
+            cookies.cookieHeaderFor(url)?.let { put("Cookie", it) }
+        }
+        val response = Http.request(url, "GET", headers)
+        if (!response.ok) throw HttpFailure(url, response.status)
 
-        val response = client.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray())
-        val status = response.statusCode()
-        if (status !in 200..299) throw HttpFailure(url, status)
-
-        val contentType = response.headers().firstValue("Content-Type").orElse(null)
-        if (contentType != null && !looksLikeImage(contentType)) throw HttpFailure(url, status, "not an image: $contentType")
-        if (response.body().isEmpty()) throw HttpFailure(url, status, "empty body")
-        return FetchedImage(response.body(), url, contentType)
+        val contentType = response.header("Content-Type")
+        if (contentType != null && !looksLikeImage(contentType)) throw HttpFailure(url, response.status, "not an image: $contentType")
+        if (response.body.isEmpty()) throw HttpFailure(url, response.status, "empty body")
+        return FetchedImage(response.body, url, contentType)
     }
 
     private fun looksLikeImage(contentType: String): Boolean {

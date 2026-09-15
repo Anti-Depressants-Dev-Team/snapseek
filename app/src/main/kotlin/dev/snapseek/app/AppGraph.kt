@@ -13,12 +13,12 @@ import dev.snapseek.core.download.BulkDownloader
 import dev.snapseek.core.download.DownloadManager
 import dev.snapseek.core.download.FileNamer
 import dev.snapseek.core.download.ImageFetcher
-import dev.snapseek.core.download.ImageIoTranscoder
+import dev.snapseek.app.platform.ImageIoTranscoder
 import dev.snapseek.core.history.BookmarkRepository
 import dev.snapseek.core.history.HistoryRepository
 import dev.snapseek.core.history.InMemoryBookmarkRepository
 import dev.snapseek.core.history.InMemoryHistoryRepository
-import dev.snapseek.core.history.SqliteStore
+import dev.snapseek.app.platform.SqliteStore
 import dev.snapseek.core.model.Service
 import dev.snapseek.core.services.ServiceRepository
 import dev.snapseek.core.settings.AppPaths

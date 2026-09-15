@@ -17,7 +17,16 @@ dependencies {
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.kotlin.logging)
+    implementation(libs.sqlite.jdbc)
     runtimeOnly(libs.slf4j.simple)
+
+    testImplementation(kotlin("test"))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 compose.desktop {

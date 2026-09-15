@@ -1,4 +1,4 @@
-package dev.snapseek.core.history
+package dev.snapseek.app.platform
 
 import dev.snapseek.core.model.Bookmark
 import dev.snapseek.core.model.NewHistoryEntry

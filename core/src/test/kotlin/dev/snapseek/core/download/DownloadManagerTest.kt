@@ -87,7 +87,7 @@ class DownloadManagerTest {
         val manager = DownloadManager(
             resolvers = listOf(resolver),
             fetcher = ImageFetcher(cookies, RefererPolicy()),
-            transcoder = ImageIoTranscoder(),
+            transcoder = PassThroughTranscoder,
             namer = FileNamer(),
             history = history,
             settings = settings,
@@ -150,5 +150,18 @@ class DownloadManagerTest {
         manager.enqueue(request)
         val job = assertIs<DownloadJob.Failed>(awaitFinished(manager, request.id))
         assertTrue(job.message.contains("not an image"), job.message)
+    }
+}
+
+/**
+ * The pipeline's own tests care about naming, hashing, duplicates and history, not about pixels, so they run on a
+ * transcoder that only relabels: it keeps the bytes and reports the container the caller asked for.
+ */
+private object PassThroughTranscoder : ImageTranscoder {
+    override fun transcode(bytes: ByteArray, target: OutputFormat, fallbackExtension: String?): TranscodeResult {
+        val source = ImageKind.sniff(bytes)
+        val kind = target.kind ?: source
+        val extension = if (kind == ImageKind.UNKNOWN) fallbackExtension ?: kind.extension else kind.extension
+        return TranscodeResult(bytes, kind, copiedThrough = kind == source, extension = extension)
     }
 }
