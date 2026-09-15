@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "snapseek"
 
-include(":core", ":browser", ":app")
+include(":core", ":browser", ":app", ":androidApp")
