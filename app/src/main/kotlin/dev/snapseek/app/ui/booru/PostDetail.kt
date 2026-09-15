@@ -1,5 +1,6 @@
 package dev.snapseek.app.ui.booru
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +33,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import dev.snapseek.app.AppGraph
 import dev.snapseek.app.ui.common.RemoteImage
 import dev.snapseek.app.ui.common.UiIcons
@@ -80,8 +86,13 @@ fun PostDetail(
     onOpenWeb: (String) -> Unit,
 ) {
     val settings by graph.settings.settings.collectAsState()
+    val account by vm.account.collectAsState()
+    val collections by vm.collections.collectAsState()
+    val lastCollection by vm.lastCollection.collectAsState()
     val focus = remember { FocusRequester() }
     var formatMenu by remember { mutableStateOf(false) }
+    var boardMenu by remember { mutableStateOf(false) }
+    var newBoardDialog by remember { mutableStateOf(false) }
     var quality by remember(post.id) { mutableStateOf(settings.booruQuality) }
     LaunchedEffect(post.id) { focus.requestFocus() }
 
@@ -99,6 +110,7 @@ fun PostDetail(
                     Key.DirectionRight -> { vm.next(); true }
                     Key.S -> { vm.save(post, quality = quality); true }
                     Key.B -> { vm.toggleBookmark(post); true }
+                    Key.P -> { lastCollection?.let { vm.saveToCollection(post, it) }; true }
                     else -> false
                 }
             },
@@ -188,6 +200,37 @@ fun PostDetail(
                     }
                 }
 
+                if (vm.accountClient != null && account != null) {
+                    val noun = vm.accountClient.collectionNoun
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick = { lastCollection?.let { vm.saveToCollection(post, it) } ?: run { boardMenu = true } },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, SnapSeekColors.PrimaryHover),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = SnapSeekColors.TextMain),
+                        ) {
+                            Icon(UiIcons.Pin, null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(lastCollection?.let { "Save to ${it.name}" } ?: "Save to a $noun", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Box {
+                            IconButton(onClick = { boardMenu = true }) { Icon(UiIcons.ChevronDown, "Choose $noun", tint = SnapSeekColors.TextMain) }
+                            DropdownMenu(expanded = boardMenu, onDismissRequest = { boardMenu = false }, modifier = Modifier.widthIn(min = 240.dp, max = 340.dp)) {
+                                collections.forEach { c ->
+                                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { boardMenu = false; vm.saveToCollection(post, c) })
+                                }
+                                if (collections.isNotEmpty()) HorizontalDivider(color = SnapSeekColors.Border)
+                                DropdownMenuItem(
+                                    text = { Text("New $noun…", color = SnapSeekColors.PrimaryHover) },
+                                    leadingIcon = { Icon(UiIcons.Plus, null, modifier = Modifier.size(14.dp)) },
+                                    onClick = { boardMenu = false; newBoardDialog = true },
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (post.hasSample && !post.isVideo) {
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("Quality", style = MaterialTheme.typography.labelMedium, color = SnapSeekColors.TextMuted, modifier = Modifier.padding(end = 4.dp))
@@ -229,7 +272,43 @@ fun PostDetail(
                 if (categories.isEmpty() && post.tags.isNotEmpty() && post.tagCategories == null) {
                     Text("Loading tag categories…", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted)
                 }
-                Text("Esc closes · ← → move · S saves · B bookmarks", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted.copy(alpha = 0.6f))
+                Text(
+                    if (account != null) "Esc closes · ← → move · S saves · B bookmarks · P saves to your last ${vm.accountClient?.collectionNoun}" else "Esc closes · ← → move · S saves · B bookmarks",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SnapSeekColors.TextMuted.copy(alpha = 0.6f),
+                )
+            }
+        }
+    }
+
+    if (newBoardDialog) {
+        NewCollectionDialog(
+            noun = vm.accountClient?.collectionNoun ?: "collection",
+            onCreate = { name -> vm.createCollection(name, thenSave = post); newBoardDialog = false },
+            onDismiss = { newBoardDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun NewCollectionDialog(noun: String, onCreate: (String) -> Unit, onDismiss: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(16.dp), color = SnapSeekColors.Panel, border = BorderStroke(1.dp, SnapSeekColors.Border), modifier = Modifier.width(380.dp)) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("New $noun", style = MaterialTheme.typography.titleLarge, color = SnapSeekColors.TextMain)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("The $noun is created on the site and this post is saved into it.", style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Cancel", color = SnapSeekColors.TextMuted) }
+                    Button(
+                        onClick = { onCreate(name.trim()) },
+                        enabled = name.isNotBlank(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SnapSeekColors.Primary, contentColor = Color.White),
+                    ) { Text("Create and save") }
+                }
             }
         }
     }

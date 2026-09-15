@@ -53,6 +53,8 @@ Every site on the home screen opens as a native grid: a search box, previews, on
 
 Reddit is missing on purpose: it no longer answers anonymous JSON requests.
 
+**Your Pinterest account.** Press **Connect account** on the Pinterest screen: the website tab opens on Pinterest's login page. Sign in there once (the embedded Chromium keeps the session), press Home, open Pinterest again, and the native screen now shows your **home feed** when the search box is empty, lists **your boards** under the account chip, and offers **Save to board** on every pin (details panel, the multi-select bar, or `P` for your last board). New boards can be created from the same menu. Nothing is stored by SnapSeek beyond the browser's own cookies; log out on the website tab to disconnect.
+
 **Boorus**
 
 Borrowed from [Boorusama](https://github.com/khoadng/Boorusama): boorus are browsed natively through their API instead of a web page. Six API families are supported, which covers most sites out there:

@@ -1,9 +1,12 @@
 package dev.snapseek.app.vm
 
+import dev.snapseek.core.booru.AccountCapable
 import dev.snapseek.core.booru.BooruClient
 import dev.snapseek.core.booru.BooruHttp
 import dev.snapseek.core.booru.BooruPost
 import dev.snapseek.core.booru.MissingCredentialsException
+import dev.snapseek.core.booru.RemoteAccount
+import dev.snapseek.core.booru.RemoteCollection
 import dev.snapseek.core.booru.TagBlacklist
 import dev.snapseek.core.booru.TagCategory
 import dev.snapseek.core.booru.TagSuggestion
@@ -85,6 +88,115 @@ class BooruViewModel(
         .map { list -> list.filter { it.task.serviceId == service.id } }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
+    // ---- account (sites that can use the browser's login) ------------------------------------------------------
+
+    val accountClient: AccountCapable? = client as? AccountCapable
+
+    private val _account = MutableStateFlow<RemoteAccount?>(null)
+    val account: StateFlow<RemoteAccount?> = _account.asStateFlow()
+
+    private val _collections = MutableStateFlow<List<RemoteCollection>>(emptyList())
+    val collections: StateFlow<List<RemoteCollection>> = _collections.asStateFlow()
+
+    private val _lastCollection = MutableStateFlow<RemoteCollection?>(null)
+    val lastCollection: StateFlow<RemoteCollection?> = _lastCollection.asStateFlow()
+
+    private val _accountBusy = MutableStateFlow(false)
+    val accountBusy: StateFlow<Boolean> = _accountBusy.asStateFlow()
+
+    private val _notice = MutableStateFlow<String?>(null)
+    /** Short-lived feedback ("Saved to Inspo"), clears itself after a few seconds. */
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun refreshAccount(force: Boolean = false) {
+        val ac = accountClient ?: return
+        scope.launch {
+            _accountBusy.value = true
+            val found = runCatching { ac.account(force) }.onFailure { log.warn(it) { "Account check failed on ${service.name}" } }.getOrNull()
+            val wasConnected = _account.value != null
+            _account.value = found
+            _accountBusy.value = false
+            if (found != null) {
+                loadCollections()
+                // The empty search is the personal feed once logged in; load it if the grid is still empty.
+                val s = _state.value
+                if (!wasConnected && s.activeTags.isEmpty() && s.posts.isEmpty() && !s.loading) search("")
+            } else {
+                _collections.value = emptyList()
+            }
+        }
+    }
+
+    fun loadCollections() {
+        val ac = accountClient ?: return
+        scope.launch {
+            _collections.value = runCatching { ac.collections() }
+                .onFailure { log.warn(it) { "Couldn't list ${ac.collectionNoun}s on ${service.name}" }; notice("Couldn't load your ${ac.collectionNoun}s: ${it.message}") }
+                .getOrDefault(emptyList())
+            if (_lastCollection.value == null) _lastCollection.value = _collections.value.firstOrNull()
+        }
+    }
+
+    fun openCollection(collection: RemoteCollection) {
+        accountClient?.let { search(it.feedQuery(collection)) }
+    }
+
+    fun saveToCollection(post: BooruPost, collection: RemoteCollection) = saveToCollection(listOf(post), collection)
+
+    fun saveToCollection(posts: List<BooruPost>, collection: RemoteCollection) {
+        val ac = accountClient ?: return
+        if (posts.isEmpty()) return
+        _lastCollection.value = collection
+        scope.launch {
+            var ok = 0
+            var lastError: String? = null
+            for (post in posts) {
+                runCatching { ac.saveTo(post, collection) }
+                    .onSuccess { ok++ }
+                    .onFailure { lastError = it.message; log.warn(it) { "Save to ${collection.name} failed for ${post.id}" } }
+            }
+            notice(
+                when {
+                    ok == posts.size && ok == 1 -> "Saved to ${collection.name}"
+                    ok == posts.size -> "Saved $ok pins to ${collection.name}"
+                    ok == 0 -> "Couldn't save to ${collection.name}: ${lastError ?: "unknown error"}"
+                    else -> "Saved $ok of ${posts.size} to ${collection.name}; last error: $lastError"
+                },
+            )
+            if (ok > 0) loadCollections()
+        }
+    }
+
+    fun saveSelectedToCollection(collection: RemoteCollection) {
+        saveToCollection(_state.value.selectedPosts, collection)
+        clearSelection()
+    }
+
+    /** Creates a collection and, when [thenSave] is given, saves that post into it right away. */
+    fun createCollection(name: String, thenSave: BooruPost? = null) {
+        val ac = accountClient ?: return
+        if (name.isBlank()) return
+        scope.launch {
+            runCatching { ac.createCollection(name) }
+                .onSuccess { created ->
+                    _collections.update { listOf(created) + it }
+                    _lastCollection.value = created
+                    if (thenSave != null) saveToCollection(thenSave, created) else notice("Created ${ac.collectionNoun} ${created.name}")
+                }
+                .onFailure { notice("Couldn't create ${ac.collectionNoun}: ${it.message}") }
+        }
+    }
+
+    fun displayTag(tag: String): String = client.displayTag(tag)
+
+    private fun notice(text: String) {
+        _notice.value = text
+        scope.launch {
+            delay(4500)
+            if (_notice.value == text) _notice.value = null
+        }
+    }
+
     private val separator: String get() = client.tagSeparator
     private val activeQuery: String get() = client.joinQuery(_state.value.activeTags)
     private val effectiveQuery: String
@@ -97,6 +209,7 @@ class BooruViewModel(
 
     init {
         search("")
+        refreshAccount()
     }
 
     // ---- searching -------------------------------------------------------------------------------------------

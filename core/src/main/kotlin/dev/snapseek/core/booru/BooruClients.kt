@@ -19,7 +19,7 @@ object BooruClients {
             ServiceKind.E621 -> E621Client(service.url, credentials)
             ServiceKind.PHILOMENA -> PhilomenaClient(service.url, credentials)
             ServiceKind.SZURUBOORU -> SzurubooruClient(service.url, credentials)
-            ServiceKind.PINTEREST -> PinterestClient(service.url)
+            ServiceKind.PINTEREST -> PinterestClient(service.url, cookies)
             ServiceKind.PIXIV -> PixivClient(service.url, cookies)
             ServiceKind.DEVIANTART -> DeviantArtClient(service.url)
             ServiceKind.WALLHAVEN -> WallhavenClient(service.url, credentials)

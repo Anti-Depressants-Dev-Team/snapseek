@@ -39,16 +39,23 @@ class BooruHttp(
         .build()
 
     suspend fun get(url: String, headers: Map<String, String> = emptyMap(), accept: String = "application/json, */*;q=0.5"): String =
+        send(url, headers, accept) { it.GET() }
+
+    /** Form-encoded POST. Non-2xx answers still surface their body through [BooruHttpException.body], since sites explain failures there. */
+    suspend fun post(url: String, form: String, headers: Map<String, String> = emptyMap(), accept: String = "application/json, */*;q=0.5"): String =
+        send(url, headers + ("Content-Type" to (headers["Content-Type"] ?: "application/x-www-form-urlencoded; charset=UTF-8")), accept) {
+            it.POST(HttpRequest.BodyPublishers.ofString(form))
+        }
+
+    private suspend fun send(url: String, headers: Map<String, String>, accept: String, method: (HttpRequest.Builder) -> HttpRequest.Builder): String =
         withContext(Dispatchers.IO) {
             val builder = HttpRequest.newBuilder(URI(url))
                 .timeout(timeout)
                 .header("User-Agent", userAgent)
                 .header("Accept", headers["Accept"] ?: accept)
                 .header("Accept-Encoding", "gzip")
-                .GET()
             headers.filterKeys { !it.equals("Accept", ignoreCase = true) }.forEach { (k, v) -> builder.header(k, v) }
-            val response = client.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofByteArray()).await()
-            if (response.statusCode() !in 200..299) throw BooruHttpException(url, response.statusCode())
+            val response = client.sendAsync(method(builder).build(), HttpResponse.BodyHandlers.ofByteArray()).await()
             val bytes = response.body()
             val encoding = response.headers().firstValue("Content-Encoding").orElse("")
             val decoded = if (encoding.contains("gzip", ignoreCase = true) || bytes.isGzip()) {
@@ -56,7 +63,9 @@ class BooruHttp(
             } else {
                 bytes
             }
-            decoded.toString(Charsets.UTF_8)
+            val text = decoded.toString(Charsets.UTF_8)
+            if (response.statusCode() !in 200..299) throw BooruHttpException(url, response.statusCode(), text)
+            text
         }
 
     private fun ByteArray.isGzip() = size >= 2 && this[0] == 0x1f.toByte() && this[1] == 0x8b.toByte()

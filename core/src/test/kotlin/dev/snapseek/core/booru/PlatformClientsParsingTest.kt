@@ -22,7 +22,7 @@ class PlatformClientsParsingTest {
               {"type":"story","id":"999"}]}},
              "resource":{"options":{"bookmarks":["Y2JVSG81V2sxcmNH"]}}}
         """.trimIndent()
-        val (posts, next) = PinterestClient.parseSearch(body)
+        val (posts, next) = PinterestClient.parseFeed(body)
         val p = posts.single()
         assertEquals(1055599818L, p.id)
         assertEquals("5487ddafc9df7e0f4417b6fc40e48965", p.md5)
@@ -36,11 +36,32 @@ class PlatformClientsParsingTest {
         assertEquals(4, p.score)
         assertEquals("Y2JVSG81V2sxcmNH", next)
 
-        assertNull(PinterestClient.parseSearch("""{"resource_response":{"data":{"results":[]}},"resource":{"options":{"bookmarks":["-end-"]}}}""").second)
+        assertNull(PinterestClient.parseFeed("""{"resource_response":{"data":{"results":[]}},"resource":{"options":{"bookmarks":["-end-"]}}}""").second)
         val client = PinterestClient("https://ru.pinterest.com/")
-        assertEquals(listOf("minimalist   desk".replace(Regex("\\s+"), " ")), client.splitQuery(" minimalist   desk "))
-        assertFalse(client.supportsEmptyQuery)
+        assertEquals(listOf("minimalist desk"), client.splitQuery(" minimalist   desk "))
+        assertTrue(client.supportsEmptyQuery)
         assertEquals("Pinner", client.categoryLabel(TagCategory.ARTIST))
+        assertEquals("board:123", client.feedQuery(RemoteCollection("123", "Cats")))
+    }
+
+    @Test
+    fun `pinterest account, boards and errors parse from the shapes the site uses`() {
+        val viaContext = PinterestClient.parseAccount("""{"resource_response":{"data":null},"client_context":{"is_authenticated":true,"user":{"id":"42","username":"cem","full_name":"Cem O.","image_medium_url":"https://i.pinimg.com/75x75_RS/a.jpg"}}}""")
+        assertEquals(RemoteAccount("42", "cem", "Cem O.", "https://i.pinimg.com/75x75_RS/a.jpg"), viaContext)
+
+        val viaData = PinterestClient.parseAccount("""{"resource_response":{"data":{"id":"42","username":"cem","full_name":"Cem","type":"user"}}}""")
+        assertEquals("cem", viaData?.username)
+        assertNull(PinterestClient.parseAccount("""{"resource_response":{"data":[]}}"""))
+
+        val html = """<html><script id="__PWS_INITIAL_PROPS__" type="application/json">{"initialReduxState":{"pins":{}},"context":{"user":{"id":"42","username":"cem","full_name":"Cem"},"app_version":"x"}}</script></html>"""
+        assertEquals("cem", PinterestClient.parseAccountFromHtml(html)?.username)
+
+        val boards = PinterestClient.parseBoards("""{"resource_response":{"data":[{"type":"board","id":"1001","name":"Inspo","url":"/cem/inspo/","pin_count":12,"privacy":"public","image_thumbnail_url":"https://i.pinimg.com/x.jpg"},{"type":"board","id":"1002","name":"Secret","privacy":"secret","pin_count":0},{"type":"story","id":"z"}]}}""")
+        assertEquals(2, boards.size)
+        assertEquals(RemoteCollection("1001", "Inspo", 12, "https://i.pinimg.com/x.jpg", false, "/cem/inspo/"), boards[0])
+        assertTrue(boards[1].isPrivate)
+
+        assertEquals("Authorization failed.", PinterestClient.errorMessage("""{"resource_response":{"error":{"status":"failure","http_status":401,"code":3,"message":"Authorization failed."},"data":null}}"""))
     }
 
     @Test

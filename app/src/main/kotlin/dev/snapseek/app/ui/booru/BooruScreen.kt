@@ -42,6 +42,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -78,6 +79,8 @@ import dev.snapseek.app.ui.common.UiIcons
 import dev.snapseek.app.ui.theme.SnapSeekColors
 import dev.snapseek.app.vm.BooruViewModel
 import dev.snapseek.core.booru.BooruPost
+import dev.snapseek.core.booru.RemoteAccount
+import dev.snapseek.core.booru.RemoteCollection
 import dev.snapseek.core.booru.TagCategory
 import dev.snapseek.core.download.BulkDownloader
 import dev.snapseek.core.model.DownloadQuality
@@ -94,9 +97,14 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
     val bulkTasks by vm.bulkTasks.collectAsState()
     val settings by graph.settings.settings.collectAsState()
     val jobs by graph.downloads.jobs.collectAsState()
+    val account by vm.account.collectAsState()
+    val collections by vm.collections.collectAsState()
+    val accountBusy by vm.accountBusy.collectAsState()
+    val notice by vm.notice.collectAsState()
     val gridState = rememberLazyStaggeredGridState()
     var bulkDialog by remember { mutableStateOf(false) }
     var saveMenu by remember { mutableStateOf(false) }
+    var boardMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(gridState, state.posts.size) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -172,6 +180,29 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                     )
                 }
                 ToolbarToggle(icon = UiIcons.DownloadAll, label = "Download everything matching this search", active = false, onClick = { bulkDialog = true })
+                if (vm.accountClient != null) {
+                    AccountChip(
+                        account = account,
+                        busy = accountBusy,
+                        collections = collections,
+                        collectionNoun = vm.accountClient.collectionNoun,
+                        onConnect = { onOpenWeb(vm.accountClient.loginUrl) },
+                        onHomeFeed = { vm.search("") },
+                        onOpenCollection = vm::openCollection,
+                        onRefresh = { vm.refreshAccount(force = true) },
+                        onOpenProfile = { account?.let { onOpenWeb("${vm.service.websiteUrl.trimEnd('/')}/${it.username}/") } },
+                    )
+                }
+            }
+
+            if (notice != null) {
+                Text(
+                    notice!!,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp)
+                        .background(SnapSeekColors.PrimaryContainer, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                )
             }
 
             if (state.activeTags.isNotEmpty()) {
@@ -181,7 +212,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                             Modifier.background(SnapSeekColors.PrimaryContainer, RoundedCornerShape(999.dp)).padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(tag, style = MaterialTheme.typography.labelMedium, color = Color(0xFFEDE0FF))
+                            Text(vm.displayTag(tag), style = MaterialTheme.typography.labelMedium, color = Color(0xFFEDE0FF))
                             IconButton(onClick = { vm.removeTag(tag) }, modifier = Modifier.size(20.dp)) {
                                 Icon(UiIcons.Close, "Remove $tag", tint = Color(0xFFEDE0FF), modifier = Modifier.size(11.dp))
                             }
@@ -203,9 +234,12 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                                 .padding(horizontal = 10.dp, vertical = 3.dp),
                         )
                     }
-                    TextButton(onClick = vm::clearHistory, modifier = Modifier.height(26.dp)) {
-                        Text("Clear", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted)
-                    }
+                    Text(
+                        "Clear",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = SnapSeekColors.TextMuted,
+                        modifier = Modifier.clickable(onClick = vm::clearHistory).padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
                 }
             }
 
@@ -240,6 +274,25 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                             }
                         }
                     }
+                    if (account != null && collections.isNotEmpty()) {
+                        Box {
+                            OutlinedButton(
+                                onClick = { boardMenu = true },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0x66FFFFFF)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            ) {
+                                Icon(UiIcons.Pin, null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Save to ${vm.accountClient?.collectionNoun}")
+                            }
+                            DropdownMenu(expanded = boardMenu, onDismissRequest = { boardMenu = false }) {
+                                collections.forEach { c ->
+                                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { boardMenu = false; vm.saveSelectedToCollection(c) })
+                                }
+                            }
+                        }
+                    }
                     IconButton(onClick = vm::clearSelection) { Icon(UiIcons.Close, "Clear selection", tint = Color.White) }
                 }
             }
@@ -247,15 +300,36 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 if (state.posts.isEmpty() && !state.loading) {
                     Column(Modifier.align(Alignment.Center).padding(40.dp).widthIn(max = 560.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val emptySearch = state.activeTags.isEmpty()
                         val message = when {
                             state.error != null -> state.error
                             state.needsQuery -> "Type something above to search ${vm.service.name}."
+                            emptySearch && vm.client.emptyQueryHint != null -> vm.client.emptyQueryHint
                             else -> "No posts match these tags."
                         }
                         Text(message!!, color = if (state.error != null) SnapSeekColors.Danger else SnapSeekColors.TextMuted, textAlign = TextAlign.Center)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (state.error != null) TextButton(onClick = { vm.loadMore() }) { Text("Retry") }
+                            if (vm.accountClient != null && account == null && emptySearch) {
+                                Button(
+                                    onClick = { onOpenWeb(vm.accountClient.loginUrl) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SnapSeekColors.Primary, contentColor = Color.White),
+                                ) {
+                                    Icon(UiIcons.User, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Connect account")
+                                }
+                            }
                             TextButton(onClick = { onOpenWeb(vm.service.websiteUrl) }) { Text("Open the website instead", color = SnapSeekColors.PrimaryHover) }
+                        }
+                        if (vm.accountClient != null && account == null && emptySearch) {
+                            Text(
+                                "Log in on the website tab that opens, then press Home and come back here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = SnapSeekColors.TextMuted,
+                                textAlign = TextAlign.Center,
+                            )
                         }
                     }
                 }
@@ -326,6 +400,67 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
             },
             onDismiss = { bulkDialog = false },
         )
+    }
+}
+
+/** "Connect account" when the browser isn't logged in; otherwise the username with a menu of feed and collections. */
+@Composable
+private fun AccountChip(
+    account: RemoteAccount?,
+    busy: Boolean,
+    collections: List<RemoteCollection>,
+    collectionNoun: String,
+    onConnect: () -> Unit,
+    onHomeFeed: () -> Unit,
+    onOpenCollection: (RemoteCollection) -> Unit,
+    onRefresh: () -> Unit,
+    onOpenProfile: () -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        OutlinedButton(
+            onClick = { if (account == null) onConnect() else open = true },
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, if (account != null) SnapSeekColors.PrimaryHover else SnapSeekColors.Border),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = if (account != null) SnapSeekColors.TextMain else SnapSeekColors.TextMuted),
+            modifier = Modifier.height(44.dp),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = SnapSeekColors.PrimaryHover)
+            } else {
+                Icon(UiIcons.User, null, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(account?.let { "@${it.username}" } ?: "Connect account", maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
+            if (account != null) {
+                Spacer(Modifier.width(4.dp))
+                Icon(UiIcons.ChevronDown, null, modifier = Modifier.size(14.dp))
+            }
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.widthIn(min = 260.dp, max = 360.dp)) {
+            DropdownMenuItem(
+                text = { Text("Home feed") },
+                leadingIcon = { Icon(UiIcons.Home, null, modifier = Modifier.size(16.dp)) },
+                onClick = { open = false; onHomeFeed() },
+            )
+            if (collections.isNotEmpty()) {
+                Text("Your ${collectionNoun}s", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                collections.take(40).forEach { c ->
+                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { open = false; onOpenCollection(c) })
+                }
+            }
+            DropdownMenuItem(text = { Text("Refresh", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onRefresh() })
+            DropdownMenuItem(text = { Text("Open my profile on the website", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onOpenProfile() })
+        }
+    }
+}
+
+@Composable
+fun CollectionRow(c: RemoteCollection) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(c.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (c.isPrivate) Icon(UiIcons.Shield, "Secret", tint = SnapSeekColors.TextMuted, modifier = Modifier.size(12.dp))
+        c.count?.let { Text(compact(it), style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted) }
     }
 }
 
