@@ -44,15 +44,19 @@ class PinterestClient(
     override val safeModeTags = emptyList<String>()
     override val supportsEmptyQuery = true
     override val emptyQueryHint = "Search Pinterest above. Connect your account to see your home feed here and save pins to your boards."
-    override val searchPlaceholder = "Search Pinterest, e.g. minimalist desk setup  ·  watercolor landscape"
+    override val searchPlaceholder = "Search Pinterest, e.g. watercolor landscape  ·  mine:yuno searches everything you saved"
     override val loginUrl = "$root/login/"
     override val collectionNoun = "board"
 
     /** A Pinterest search is a phrase, not a tag list. */
     override fun splitQuery(query: String): List<String> = query.trim().replace(Regex("\\s+"), " ").takeIf { it.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
 
-    override fun displayTag(tag: String): String =
-        if (tag.startsWith(BOARD_PREFIX)) "Board: ${boardNames[tag.removePrefix(BOARD_PREFIX)] ?: tag.removePrefix(BOARD_PREFIX)}" else tag
+    override fun displayTag(tag: String): String = when {
+        tag.startsWith(BOARD_PREFIX) -> "Board: ${boardNames[tag.removePrefix(BOARD_PREFIX)] ?: tag.removePrefix(BOARD_PREFIX)}"
+        tag == MINE_PREFIX.trim() || tag == MINE_PREFIX -> "Everything I saved"
+        tag.startsWith(MINE_PREFIX) -> "Saved: ${tag.removePrefix(MINE_PREFIX).trim()}"
+        else -> tag
+    }
 
     override fun categoryLabel(category: TagCategory): String = when (category) {
         TagCategory.ARTIST -> "Pinner"
@@ -70,6 +74,7 @@ class PinterestClient(
         return when {
             q.isEmpty() -> homeFeed(page)
             q.startsWith(BOARD_PREFIX) -> boardFeed(q.removePrefix(BOARD_PREFIX), page)
+            q.startsWith(MINE_PREFIX) -> myPins(q.removePrefix(MINE_PREFIX).trim(), page)
             else -> search(q, page)
         }
     }
@@ -86,6 +91,38 @@ class PinterestClient(
         val sourceUrl = "/search/pins/?q=${q.urlEncoded()}&rs=typed"
         val (posts, next) = parseFeed(call("BaseSearchResource", sourceUrl, options))
         cursors.store("search|$q", page + 1, next)
+        return posts
+    }
+
+    /**
+     * Everything this account has saved, across every board at once, so finding an old pin doesn't mean opening
+     * boards one by one. An empty term lists the profile's saved pins; a term searches inside them.
+     */
+    private suspend fun myPins(term: String, page: Int): List<BooruPost> {
+        val me = account() ?: throw AccountException("Connect your Pinterest account to search what you saved.")
+        val key = "mine|$term"
+        val bookmark = cursors.cursorFor(key, page)
+        if (bookmark == CursorCache.MISSING) return emptyList()
+        val body = if (term.isEmpty()) {
+            val options = buildJsonObject {
+                put("username", me.username)
+                put("field_set_key", "grid_item")
+                put("is_own_profile_pins", true)
+                if (bookmark != null) put("bookmarks", buildJsonArray { add(bookmark) })
+            }
+            call("UserPinsResource", "/${me.username}/_saved/", options, handler = "www/[username]/_saved.js")
+        } else {
+            val options = buildJsonObject {
+                put("query", term)
+                put("scope", "my_pins")
+                put("rs", "typed")
+                if (bookmark != null) put("bookmarks", buildJsonArray { add(bookmark) })
+            }
+            call("BaseSearchResource", "/search/my_pins/?q=${term.urlEncoded()}&rs=typed", options)
+        }
+        val (posts, next) = parseFeed(body)
+        cursors.store(key, page + 1, next)
+        log.info { "Pinterest saved pins page $page for \"$term\": ${posts.size} pins" }
         return posts
     }
 
@@ -328,6 +365,9 @@ class PinterestClient(
 
     companion object {
         const val BOARD_PREFIX = "board:"
+
+        /** Query prefix that searches the account's own saved pins instead of all of Pinterest. */
+        const val MINE_PREFIX = "mine:"
         private const val SEARCH_HANDLER = "www/search/[scope].js"
         private val CSRF_COOKIE = Regex("""(?:^|;\s*)csrftoken=([^;]+)""")
 

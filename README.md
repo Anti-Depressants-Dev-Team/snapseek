@@ -55,7 +55,7 @@ Reddit is missing on purpose: it no longer answers anonymous JSON requests.
 
 **Your Pinterest account.** Open Pinterest and it checks the embedded browser's session straight away: if you are already signed in, the account chip shows your name and the grid opens on your **home feed**, with no extra steps. If not, press **Connect account**, sign in on the page that opens, and the app brings you back the moment the session appears, feed and boards loaded. There is a **Back to Pinterest** button on that page too, for when you would rather return yourself.
 
-Once connected, the account chip lists **your boards** (browse any of them in the grid) and every pin offers **Save to board** from the details panel, the multi-select bar, or `P` for your last board. New boards can be created from the same menu. Nothing is stored by SnapSeek beyond the browser's own cookies; log out on the website tab to disconnect.
+Once connected, the account chip lists **your boards** (browse any of them in the grid) and every pin offers **Save to board** from the details panel, the multi-select bar, or `P` for your last board. Any menu of boards longer than six starts with a filter box, so a hundred boards are two or three keystrokes away: type, press Enter to take the first match, or create a board under the name you just typed. **Search everything I saved**, in the same menu, searches your own pins across every board at once instead of opening them one by one; typing `mine:something` in the search box does the same. Nothing is stored by SnapSeek beyond the browser's own cookies; log out on the website tab to disconnect.
 
 **Boorus**
 

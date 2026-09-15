@@ -42,6 +42,8 @@ class PlatformClientsParsingTest {
         assertTrue(client.supportsEmptyQuery)
         assertEquals("Pinner", client.categoryLabel(TagCategory.ARTIST))
         assertEquals("board:123", client.feedQuery(RemoteCollection("123", "Cats")))
+        assertEquals("Everything I saved", client.displayTag("mine:"))
+        assertEquals("Saved: yuno gasai", client.displayTag("mine:yuno gasai"))
     }
 
     @Test
@@ -62,6 +64,21 @@ class PlatformClientsParsingTest {
         assertTrue(boards[1].isPrivate)
 
         assertEquals("Authorization failed.", PinterestClient.errorMessage("""{"resource_response":{"error":{"status":"failure","http_status":401,"code":3,"message":"Authorization failed."},"data":null}}"""))
+    }
+
+    @Test
+    fun `typing narrows a long collection list, closest names first`() {
+        val boards = listOf("Emo/Goth", "Yuno Gasai", "Asthetics", "kaneki ken", "I'm a failure", "Juuzou Suzuya", "gas station")
+            .map { RemoteCollection(it, it) }
+        fun names(q: String) = boards.matching(q).map { it.name }
+
+        assertEquals(boards, boards.matching("   "))
+        // Starts-with wins over a word that starts with it, which wins over a match in the middle.
+        assertEquals(listOf("gas station", "Yuno Gasai"), names("gas"))
+        // Words may be typed in any order, and case never matters.
+        assertEquals(listOf("Yuno Gasai"), names("GASAI yuno"))
+        assertEquals(listOf("Emo/Goth"), names("goth"))
+        assertEquals(emptyList<String>(), names("nothing here"))
     }
 
     @Test

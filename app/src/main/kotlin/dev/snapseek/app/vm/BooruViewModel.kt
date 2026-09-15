@@ -224,8 +224,8 @@ class BooruViewModel(
         clearSelection()
     }
 
-    /** Creates a collection and, when [thenSave] is given, saves that post into it right away. */
-    fun createCollection(name: String, thenSave: BooruPost? = null) {
+    /** Creates a collection and, when [thenSave] is given, saves those posts into it right away. */
+    fun createCollection(name: String, thenSave: List<BooruPost> = emptyList()) {
         val ac = accountClient ?: return
         if (name.isBlank()) return
         scope.launch {
@@ -233,9 +233,12 @@ class BooruViewModel(
                 .onSuccess { created ->
                     _collections.update { listOf(created) + it }
                     _lastCollection.value = created
-                    if (thenSave != null) saveToCollection(thenSave, created) else notice("Created ${ac.collectionNoun} ${created.name}")
+                    if (thenSave.isNotEmpty()) saveToCollection(thenSave, created) else notice("Created ${ac.collectionNoun} ${created.name}")
                 }
-                .onFailure { notice("Couldn't create ${ac.collectionNoun}: ${it.message}") }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    notice("Couldn't create ${ac.collectionNoun}: ${it.message}")
+                }
         }
     }
 

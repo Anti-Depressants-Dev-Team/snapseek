@@ -21,6 +21,30 @@ data class RemoteCollection(
 class AccountException(message: String) : RuntimeException(message)
 
 /**
+ * Narrows a long list of collections to what someone is typing. Every word has to appear somewhere in the name,
+ * in any order, so "gasai yuno" finds "Yuno Gasai"; the closest matches come first: names that begin with what was
+ * typed, then names with a word that begins with it, then the rest.
+ */
+fun List<RemoteCollection>.matching(query: String): List<RemoteCollection> {
+    val trimmed = query.trim().lowercase()
+    if (trimmed.isEmpty()) return this
+    val words = trimmed.split(' ').filter { it.isNotEmpty() }
+    val starts = mutableListOf<RemoteCollection>()
+    val wordStarts = mutableListOf<RemoteCollection>()
+    val rest = mutableListOf<RemoteCollection>()
+    for (collection in this) {
+        val name = collection.name.lowercase()
+        if (!words.all { name.contains(it) }) continue
+        when {
+            name.startsWith(trimmed) -> starts += collection
+            name.split(' ', '-', '_', '/', '.').any { part -> words.any { part.startsWith(it) } } -> wordStarts += collection
+            else -> rest += collection
+        }
+    }
+    return starts + wordStarts + rest
+}
+
+/**
  * The answer to "is the browser logged in to this site?". [Waiting] and [Failed] are separate on purpose:
  * one means keep waiting for the user, the other means something is wrong and should be shown.
  */

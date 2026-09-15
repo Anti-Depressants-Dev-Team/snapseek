@@ -216,17 +216,15 @@ fun PostDetail(
                         }
                         Box {
                             IconButton(onClick = { boardMenu = true }) { Icon(UiIcons.ChevronDown, "Choose $noun", tint = SnapSeekColors.TextMain) }
-                            DropdownMenu(expanded = boardMenu, onDismissRequest = { boardMenu = false }, modifier = Modifier.widthIn(min = 240.dp, max = 340.dp)) {
-                                collections.forEach { c ->
-                                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { boardMenu = false; vm.saveToCollection(post, c) })
-                                }
-                                if (collections.isNotEmpty()) HorizontalDivider(color = SnapSeekColors.Border)
-                                DropdownMenuItem(
-                                    text = { Text("New $noun…", color = SnapSeekColors.PrimaryHover) },
-                                    leadingIcon = { Icon(UiIcons.Plus, null, modifier = Modifier.size(14.dp)) },
-                                    onClick = { boardMenu = false; newBoardDialog = true },
-                                )
-                            }
+                            CollectionMenu(
+                                expanded = boardMenu,
+                                collections = collections,
+                                noun = noun,
+                                onDismiss = { boardMenu = false },
+                                onPick = { vm.saveToCollection(post, it) },
+                                createLabel = "New $noun…",
+                                onCreate = { name -> if (name.isEmpty()) newBoardDialog = true else vm.createCollection(name, thenSave = listOf(post)) },
+                            )
                         }
                     }
                 }
@@ -284,7 +282,7 @@ fun PostDetail(
     if (newBoardDialog) {
         NewCollectionDialog(
             noun = vm.accountClient?.collectionNoun ?: "collection",
-            onCreate = { name -> vm.createCollection(name, thenSave = post); newBoardDialog = false },
+            onCreate = { name -> vm.createCollection(name, thenSave = listOf(post)); newBoardDialog = false },
             onDismiss = { newBoardDialog = false },
         )
     }

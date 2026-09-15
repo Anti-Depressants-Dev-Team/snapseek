@@ -79,12 +79,14 @@ import dev.snapseek.app.ui.common.UiIcons
 import dev.snapseek.app.ui.theme.SnapSeekColors
 import dev.snapseek.app.vm.BooruViewModel
 import dev.snapseek.core.booru.BooruPost
+import dev.snapseek.core.booru.PinterestClient
 import dev.snapseek.core.booru.RemoteAccount
 import dev.snapseek.core.booru.RemoteCollection
 import dev.snapseek.core.booru.TagCategory
 import dev.snapseek.core.download.BulkDownloader
 import dev.snapseek.core.model.DownloadQuality
 import dev.snapseek.core.model.OutputFormat
+import dev.snapseek.core.model.ServiceKind
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Native booru browsing: tag search with suggestions, masonry grid, selection, bulk download, and a detail view. */
@@ -189,6 +191,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                         collectionNoun = vm.accountClient.collectionNoun,
                         onConnect = onConnectAccount,
                         onHomeFeed = { vm.search("") },
+                        onSearchMine = if (vm.service.kind == ServiceKind.PINTEREST) ({ vm.search(PinterestClient.MINE_PREFIX) }) else null,
                         onOpenCollection = vm::openCollection,
                         onRefresh = { vm.refreshAccount(force = true) },
                         onOpenProfile = { account?.let { onOpenWeb("${vm.service.websiteUrl.trimEnd('/')}/${it.username}/") } },
@@ -287,11 +290,20 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                                 Spacer(Modifier.width(6.dp))
                                 Text("Save to ${vm.accountClient?.collectionNoun}")
                             }
-                            DropdownMenu(expanded = boardMenu, onDismissRequest = { boardMenu = false }) {
-                                collections.forEach { c ->
-                                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { boardMenu = false; vm.saveSelectedToCollection(c) })
-                                }
-                            }
+                            CollectionMenu(
+                                expanded = boardMenu,
+                                collections = collections,
+                                noun = vm.accountClient?.collectionNoun ?: "collection",
+                                onDismiss = { boardMenu = false },
+                                onPick = vm::saveSelectedToCollection,
+                                createLabel = "New ${vm.accountClient?.collectionNoun ?: "collection"}",
+                                createWhenEmpty = false,
+                                onCreate = { name ->
+                                    val posts = state.selectedPosts
+                                    vm.clearSelection()
+                                    vm.createCollection(name, thenSave = posts)
+                                },
+                            )
                         }
                     }
                     IconButton(onClick = vm::clearSelection) { Icon(UiIcons.Close, "Clear selection", tint = Color.White) }
@@ -413,6 +425,7 @@ private fun AccountChip(
     collectionNoun: String,
     onConnect: () -> Unit,
     onHomeFeed: () -> Unit,
+    onSearchMine: (() -> Unit)? = null,
     onOpenCollection: (RemoteCollection) -> Unit,
     onRefresh: () -> Unit,
     onOpenProfile: () -> Unit,
@@ -438,30 +451,39 @@ private fun AccountChip(
                 Icon(UiIcons.ChevronDown, null, modifier = Modifier.size(14.dp))
             }
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.widthIn(min = 260.dp, max = 360.dp)) {
-            DropdownMenuItem(
-                text = { Text("Home feed") },
-                leadingIcon = { Icon(UiIcons.Home, null, modifier = Modifier.size(16.dp)) },
-                onClick = { open = false; onHomeFeed() },
-            )
-            if (collections.isNotEmpty()) {
-                Text("Your ${collectionNoun}s", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
-                collections.take(40).forEach { c ->
-                    DropdownMenuItem(text = { CollectionRow(c) }, onClick = { open = false; onOpenCollection(c) })
+        CollectionMenu(
+            expanded = open,
+            collections = collections,
+            noun = collectionNoun,
+            onDismiss = { open = false },
+            onPick = onOpenCollection,
+            header = {
+                DropdownMenuItem(
+                    text = { Text("Home feed") },
+                    leadingIcon = { Icon(UiIcons.Home, null, modifier = Modifier.size(16.dp)) },
+                    onClick = { open = false; onHomeFeed() },
+                )
+                if (onSearchMine != null) {
+                    DropdownMenuItem(
+                        text = { Text("Search everything I saved") },
+                        leadingIcon = { Icon(UiIcons.Search, null, modifier = Modifier.size(16.dp)) },
+                        onClick = { open = false; onSearchMine() },
+                    )
                 }
-            }
-            DropdownMenuItem(text = { Text("Refresh", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onRefresh() })
-            DropdownMenuItem(text = { Text("Open my profile on the website", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onOpenProfile() })
-        }
-    }
-}
-
-@Composable
-fun CollectionRow(c: RemoteCollection) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(c.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (c.isPrivate) Icon(UiIcons.Shield, "Secret", tint = SnapSeekColors.TextMuted, modifier = Modifier.size(12.dp))
-        c.count?.let { Text(compact(it), style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted) }
+                if (collections.isNotEmpty()) {
+                    Text(
+                        "Your ${collectionNoun}s",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = SnapSeekColors.TextMuted,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
+                }
+            },
+            footer = {
+                DropdownMenuItem(text = { Text("Refresh", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onRefresh() })
+                DropdownMenuItem(text = { Text("Open my profile on the website", color = SnapSeekColors.TextMuted) }, onClick = { open = false; onOpenProfile() })
+            },
+        )
     }
 }
 
@@ -619,6 +641,7 @@ private fun PostCard(
         }
     }
 }
+
 
 fun tagColor(category: TagCategory): Color = when (category) {
     TagCategory.ARTIST -> Color(0xFFF87171)
