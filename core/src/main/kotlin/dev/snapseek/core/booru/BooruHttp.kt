@@ -13,6 +13,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
+import java.io.ByteArrayInputStream
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -20,11 +21,13 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.Base64
+import java.util.zip.GZIPInputStream
 
 /**
- * One JDK HttpClient shared by every booru client, with the headers boorus care about.
- * The user agent names the app on purpose: Danbooru's Cloudflare front challenges browser-like agents that
+ * One JDK HttpClient shared by every site client, with the headers sites care about.
+ * The default user agent names the app on purpose: Danbooru's Cloudflare front challenges browser-like agents that
  * don't come from a browser, and e621 rejects generic ones outright. An honest agent passes both.
+ * Sites that only talk to browsers (Pinterest, Pixiv) get a browser agent explicitly.
  */
 class BooruHttp(
     private val userAgent: String = APP_USER_AGENT,
@@ -40,18 +43,31 @@ class BooruHttp(
             val builder = HttpRequest.newBuilder(URI(url))
                 .timeout(timeout)
                 .header("User-Agent", userAgent)
-                .header("Accept", accept)
+                .header("Accept", headers["Accept"] ?: accept)
+                .header("Accept-Encoding", "gzip")
                 .GET()
-            headers.forEach { (k, v) -> builder.header(k, v) }
-            val response = client.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString()).await()
+            headers.filterKeys { !it.equals("Accept", ignoreCase = true) }.forEach { (k, v) -> builder.header(k, v) }
+            val response = client.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofByteArray()).await()
             if (response.statusCode() !in 200..299) throw BooruHttpException(url, response.statusCode())
-            response.body()
+            val bytes = response.body()
+            val encoding = response.headers().firstValue("Content-Encoding").orElse("")
+            val decoded = if (encoding.contains("gzip", ignoreCase = true) || bytes.isGzip()) {
+                GZIPInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
+            } else {
+                bytes
+            }
+            decoded.toString(Charsets.UTF_8)
         }
+
+    private fun ByteArray.isGzip() = size >= 2 && this[0] == 0x1f.toByte() && this[1] == 0x8b.toByte()
 
     companion object {
         const val APP_USER_AGENT = "SnapSeek/2.0 (desktop image saver; github.com/Yabosen/snapseek)"
+        const val BROWSER_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 
         val default: BooruHttp by lazy { BooruHttp() }
+        val browserLike: BooruHttp by lazy { BooruHttp(userAgent = BROWSER_USER_AGENT) }
 
         fun basicAuth(credentials: BooruCredentials): String =
             "Basic " + Base64.getEncoder().encodeToString("${credentials.login}:${credentials.apiKey}".toByteArray())
@@ -63,9 +79,6 @@ internal val booruJson: Json = Json { ignoreUnknownKeys = true; isLenient = true
 internal fun String.urlEncoded(): String = URLEncoder.encode(this, Charsets.UTF_8)
 
 internal fun parseJson(body: String): JsonElement? = body.takeIf { it.isNotBlank() }?.let { booruJson.parseToJsonElement(it) }
-
-internal fun JsonElement?.asObjectOrNull(): JsonObject? = this as? JsonObject
-internal fun JsonElement?.asArrayOrNull(): JsonArray? = this as? JsonArray
 
 internal fun JsonObject.str(key: String): String? =
     (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull?.takeIf { it != "null" }
@@ -88,3 +101,6 @@ internal fun absolutize(url: String?, root: String): String? = when {
     url.startsWith("http://") || url.startsWith("https://") -> url
     else -> root.trimEnd('/') + "/" + url
 }
+
+internal fun String.unescapeXml(): String = replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+    .replace("&#39;", "'").replace("&apos;", "'").replace("&amp;", "&")

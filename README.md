@@ -36,12 +36,22 @@ Build an installer for the current OS (Windows needs the WiX Toolset 3.x on the 
 
 ## Using it
 
-**Websites (Pinterest, Pixiv, DeviantArt, …)**
+Every site on the home screen opens as a native grid: a search box, previews, one-click saving, bookmarks, bulk download. The old embedded browser is one click away on each card ("Open website instead") and is still where you log in.
 
-- Pick a site on the home screen. Pinterest lets you choose a regional mirror.
-- **Right-click an image** for Save as PNG / JPEG / GIF / Save original.
-- **Alt+click an image** to save it in your default format without a menu.
-- Pinterest thumbnails and Pixiv "master" renders are upgraded to the original file before saving. Downloads reuse the browser's login cookies.
+**Platforms with native browsing**
+
+| Platform | How | Needs |
+|---|---|---|
+| Pinterest | Pinterest's own web search endpoint, paged by bookmark token, originals + 236/474/736 renders | nothing |
+| Pixiv | AJAX tag search, daily ranking when the search is empty, tag suggestions | nothing; log in on the website tab for R-18 |
+| DeviantArt | public RSS feed: `boost:popular`, `by:artist`, `in:digitalart` | nothing; 800px previews |
+| Wallhaven | public API, `sorting:toplist`, `atleast:2560x1440` | key only for NSFW |
+| Zerochan | JSON listing, comma-separated tags, suggestions | nothing |
+| Giphy, Tenor | official APIs | a free key each (developers.giphy.com, Google Cloud) |
+| Unsplash, Pexels, Pixabay | official APIs | a free key each |
+| Any other site | "Image grid from a page": give a URL with `{q}` where the search goes and it lists the images on that page (Wallpapers.com ships this way) | nothing |
+
+Reddit is missing on purpose: it no longer answers anonymous JSON requests.
 
 **Boorus**
 
@@ -56,7 +66,9 @@ Borrowed from [Boorusama](https://github.com/khoadng/Boorusama): boorus are brow
 | Philomena | derpibooru.org, ponybooru.org, furbooru.org | comma-separated tags |
 | Szurubooru | self-hosted instances | username + token if the instance requires it |
 
-Home → Manage services → **Add a booru** lists these as one-click presets. **Add a website** takes any URL and has a **Detect** button that asks the site which API it speaks. Accounts and API keys are entered per site with the key icon.
+Home → Manage services → **Add a site** lists all of the above as one-click presets. **Add by URL** takes any URL and has a **Detect** button that recognises known hosts and asks unknown ones which API they speak. Accounts and API keys are entered per site with the key icon.
+
+**Website mode** (the embedded Chromium) is still there for anything else: right-click an image for Save as PNG / JPEG / WebP / GIF / Original, or Alt+click to save in your default format. Pinterest thumbnails and Pixiv renders are upgraded to originals on the way out.
 
 - Tag search with autocomplete, `-tag` exclusion, each site's metatags, and a recent-searches row.
 - Masonry grid with infinite scroll. Hover a post to save, bookmark or select it. Select several and save them together.

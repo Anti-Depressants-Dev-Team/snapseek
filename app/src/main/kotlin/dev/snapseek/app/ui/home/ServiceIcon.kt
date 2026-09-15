@@ -65,6 +65,11 @@ private fun brandColor(key: String): Color = when (key) {
     "derpibooru" -> Color(0xFF7C3AED)
     "ponybooru" -> Color(0xFFEC4899)
     "furbooru" -> Color(0xFF10B981)
+    "zerochan" -> Color(0xFF60A5FA)
+    "wallhaven" -> Color(0xFF34D399)
+    "unsplash" -> Color(0xFFF1F5F9)
+    "pexels" -> Color(0xFF05A081)
+    "pixabay" -> Color(0xFF2EC66D)
     else -> Color(0xFFA698BA)
 }
 

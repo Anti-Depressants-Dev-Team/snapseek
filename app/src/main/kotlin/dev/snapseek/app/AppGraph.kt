@@ -27,6 +27,7 @@ import dev.snapseek.core.sites.PinterestResolver
 import dev.snapseek.core.sites.PixivResolver
 import dev.snapseek.core.sites.RefererPolicy
 import dev.snapseek.core.sites.SafebooruResolver
+import dev.snapseek.core.sites.ZerochanResolver
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -62,7 +63,7 @@ class AppGraph private constructor(
     private val booruClients = ConcurrentHashMap<String, BooruClient>()
 
     fun booruClient(service: Service): BooruClient =
-        booruClients.getOrPut("${service.kind}|${service.url}|${service.login}|${service.apiKey}") { BooruClients.create(service) }
+        booruClients.getOrPut("${service.kind}|${service.url}|${service.login}|${service.apiKey}") { BooruClients.create(service, cookies = engine) }
 
     fun booruViewModel(service: Service): BooruViewModel =
         BooruViewModel(service, booruClient(service), downloads, bulk, bookmarks, settings, services, scope)
@@ -99,7 +100,7 @@ class AppGraph private constructor(
             val history = store?.history ?: InMemoryHistoryRepository()
             val bookmarks = store?.bookmarks ?: InMemoryBookmarkRepository()
             val downloads = DownloadManager(
-                resolvers = listOf(PinterestResolver, PixivResolver, SafebooruResolver),
+                resolvers = listOf(PinterestResolver, PixivResolver, SafebooruResolver, ZerochanResolver),
                 fetcher = ImageFetcher(cookies = engine, referers = referers),
                 transcoder = SkiaImageTranscoder(ImageIoTranscoder()),
                 namer = FileNamer(),

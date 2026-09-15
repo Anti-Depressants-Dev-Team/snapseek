@@ -134,7 +134,7 @@ class DownloadManager(
             ?: RefererPolicy.hostOf(r.pageUrl)?.removePrefix("www.")?.substringBefore('.')
             ?: "image"
         return buildMap {
-            putAll(r.metadata)
+            putAll(r.metadata.filterValues { it.isNotBlank() })
             put("service", service)
             putIfAbsent("booru", service)
             put("sha256", sha)

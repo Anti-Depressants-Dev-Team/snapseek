@@ -40,6 +40,18 @@ object PixivResolver : SourceResolver {
     }
 }
 
+/** Zerochan originals are static.zerochan.net/Tag.full.ID.png or .jpg; the listing doesn't say which. */
+object ZerochanResolver : SourceResolver {
+    private val full = Regex("""^(https://static\.zerochan\.net/.+\.full\.\d+)\.(png|jpg|jpeg|gif)$""")
+
+    override fun resolve(imageUrl: String, pageUrl: String): ImageSource? {
+        val m = full.matchEntire(imageUrl) ?: return null
+        val base = m.groupValues[1]
+        val exts = listOf(m.groupValues[2], "png", "jpg", "gif").distinct()
+        return ImageSource(exts.map { "$base.$it" }, referer = "https://www.zerochan.net/")
+    }
+}
+
 /** safebooru.org//samples/1234/sample_<hash>.jpg is a downscale; //images/1234/<hash>.<ext> is the post file. */
 object SafebooruResolver : SourceResolver {
     private val sample = Regex(

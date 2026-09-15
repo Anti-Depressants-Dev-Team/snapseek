@@ -22,7 +22,8 @@ import javax.swing.UIManager
 
 /**
  * Flags (all optional):
- *   --open <serviceId>   open a service as soon as the browser runtime is ready (handy for smoke tests)
+ *   --open <serviceId>   open a service as soon as the app is ready (handy for smoke tests)
+ *   --search <query>     with --open on a native service: run this search right away
  */
 fun main(args: Array<String>) {
     System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "info")
@@ -35,9 +36,14 @@ fun main(args: Array<String>) {
 
     args.indexOf("--open").takeIf { it >= 0 && it + 1 < args.size }?.let { i ->
         val serviceId = args[i + 1]
+        val query = args.indexOf("--search").takeIf { it >= 0 && it + 1 < args.size }?.let { args[it + 1] }
         graph.scope.launch {
-            graph.engine.state.first { it is EngineState.Ready }
-            withContext(Dispatchers.Swing) { root.openService(serviceId) }
+            val service = graph.services.byId(serviceId)
+            if (service?.isBooru != true) graph.engine.state.first { it is EngineState.Ready }
+            withContext(Dispatchers.Swing) {
+                root.openService(serviceId)
+                if (query != null) root.booru.value?.search(query)
+            }
         }
     }
 

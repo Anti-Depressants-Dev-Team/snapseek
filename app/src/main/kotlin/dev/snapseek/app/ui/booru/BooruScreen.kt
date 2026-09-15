@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -65,6 +66,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -115,7 +117,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                         value = state.queryText,
                         onValueChange = vm::onQueryChanged,
                         singleLine = true,
-                        placeholder = { Text(if (vm.client.tagSeparator.contains(',')) "Search tags, comma-separated, e.g. twilight sparkle, safe" else "Search tags, e.g. 1girl scenery -text  ·  rating:general  ·  sort:score") },
+                        placeholder = { Text(vm.client.searchPlaceholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         leadingIcon = { Icon(UiIcons.Search, null, tint = SnapSeekColors.TextMuted, modifier = Modifier.size(18.dp)) },
                         trailingIcon = {
                             if (state.queryText.isNotBlank()) {
@@ -161,12 +163,14 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = SnapSeekColors.Primary, contentColor = Color.White),
                 ) { Text("Search") }
-                ToolbarToggle(
-                    icon = if (state.safeMode) UiIcons.ShieldCheck else UiIcons.Shield,
-                    label = if (state.safeMode) "Safe mode on" else "Safe mode off",
-                    active = state.safeMode,
-                    onClick = vm::toggleSafeMode,
-                )
+                if (vm.client.safeModeTags.isNotEmpty()) {
+                    ToolbarToggle(
+                        icon = if (state.safeMode) UiIcons.ShieldCheck else UiIcons.Shield,
+                        label = if (state.safeMode) "Safe mode on" else "Safe mode off",
+                        active = state.safeMode,
+                        onClick = vm::toggleSafeMode,
+                    )
+                }
                 ToolbarToggle(icon = UiIcons.DownloadAll, label = "Download everything matching this search", active = false, onClick = { bulkDialog = true })
             }
 
@@ -242,9 +246,17 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
 
             Box(Modifier.fillMaxWidth().weight(1f)) {
                 if (state.posts.isEmpty() && !state.loading) {
-                    Column(Modifier.align(Alignment.Center).padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(state.error ?: "No posts match these tags.", color = if (state.error != null) SnapSeekColors.Danger else SnapSeekColors.TextMuted)
-                        if (state.error != null) TextButton(onClick = { vm.loadMore() }) { Text("Retry") }
+                    Column(Modifier.align(Alignment.Center).padding(40.dp).widthIn(max = 560.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val message = when {
+                            state.error != null -> state.error
+                            state.needsQuery -> "Type something above to search ${vm.service.name}."
+                            else -> "No posts match these tags."
+                        }
+                        Text(message!!, color = if (state.error != null) SnapSeekColors.Danger else SnapSeekColors.TextMuted, textAlign = TextAlign.Center)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (state.error != null) TextButton(onClick = { vm.loadMore() }) { Text("Retry") }
+                            TextButton(onClick = { onOpenWeb(vm.service.websiteUrl) }) { Text("Open the website instead", color = SnapSeekColors.PrimaryHover) }
+                        }
                     }
                 }
                 LazyVerticalStaggeredGrid(
@@ -459,7 +471,7 @@ private fun PostCard(
                     .padding(start = 10.dp, end = 2.dp, top = 18.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("#${post.id}", style = MaterialTheme.typography.labelSmall, color = Color.White, modifier = Modifier.weight(1f))
+                Text(post.title ?: "#${post.displayId}", style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (post.score != null) Text("★ ${post.score}", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFDE68A), modifier = Modifier.padding(end = 2.dp))
                 IconButton(onClick = onToggleBookmark, modifier = Modifier.size(28.dp)) {
                     Icon(if (bookmarked) UiIcons.HeartFilled else UiIcons.Heart, if (bookmarked) "Remove bookmark" else "Bookmark", tint = if (bookmarked) Color(0xFFF472B6) else Color.White, modifier = Modifier.size(15.dp))

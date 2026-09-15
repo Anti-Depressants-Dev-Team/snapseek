@@ -85,7 +85,7 @@ class FilenameTemplate(private val clock: Clock = Clock.systemDefaultZone()) {
         /** Every token name the UI can offer in a help text. */
         val KNOWN_TOKENS = listOf(
             "service", "date", "hash8", "hash", "md5", "original", "extension", "uuid",
-            "id", "tags", "artist", "character", "copyright", "general", "meta", "species", "rating", "score", "width", "height", "source", "search",
+            "id", "title", "tags", "artist", "character", "copyright", "general", "meta", "species", "rating", "score", "width", "height", "source", "search",
         )
     }
 }

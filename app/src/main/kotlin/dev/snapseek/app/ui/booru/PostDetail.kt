@@ -137,9 +137,21 @@ fun PostDetail(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("#${post.id}", style = MaterialTheme.typography.headlineSmall, color = SnapSeekColors.TextMain)
                         Text(
-                            listOfNotNull("${post.width} × ${post.height}", post.extension.uppercase(), post.ratingLabel, post.score?.let { "★ $it" }).joinToString(" · "),
+                            post.title ?: "#${post.displayId}",
+                            style = if (post.title != null) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+                            color = SnapSeekColors.TextMain,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            listOfNotNull(
+                                if (post.title != null) "#${post.displayId}" else null,
+                                if (post.width > 0) "${post.width} × ${post.height}" else null,
+                                post.extension.uppercase(),
+                                post.ratingLabel.takeIf { post.rating.isNotBlank() },
+                                post.score?.let { "★ $it" },
+                            ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = SnapSeekColors.TextMuted,
                         )
@@ -205,7 +217,7 @@ fun PostDetail(
                 groups.forEach { (category, tags) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            if (categories.isEmpty() && category == TagCategory.UNKNOWN) "Tags" else category.label,
+                            if (categories.isEmpty() && category == TagCategory.UNKNOWN) "Tags" else vm.client.categoryLabel(category),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = tagColor(category),
                         )
@@ -214,7 +226,7 @@ fun PostDetail(
                         }
                     }
                 }
-                if (categories.isEmpty() && post.tags.isNotEmpty()) {
+                if (categories.isEmpty() && post.tags.isNotEmpty() && post.tagCategories == null) {
                     Text("Loading tag categories…", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted)
                 }
                 Text("Esc closes · ← → move · S saves · B bookmarks", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted.copy(alpha = 0.6f))

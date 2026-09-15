@@ -55,7 +55,7 @@ fun HistoryScreen(graph: AppGraph, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            "This session's downloads. Phase 1 keeps history across restarts with thumbnails and search.",
+            "Everything you saved, kept in your data folder across restarts. Duplicates are recognised from this list.",
             style = MaterialTheme.typography.bodySmall,
             color = SnapSeekColors.TextMuted,
         )

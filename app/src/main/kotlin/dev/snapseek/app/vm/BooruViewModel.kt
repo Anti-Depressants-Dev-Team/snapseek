@@ -3,6 +3,7 @@ package dev.snapseek.app.vm
 import dev.snapseek.core.booru.BooruClient
 import dev.snapseek.core.booru.BooruHttp
 import dev.snapseek.core.booru.BooruPost
+import dev.snapseek.core.booru.MissingCredentialsException
 import dev.snapseek.core.booru.TagBlacklist
 import dev.snapseek.core.booru.TagCategory
 import dev.snapseek.core.booru.TagSuggestion
@@ -34,7 +35,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
 
-/** One native booru browsing session: a search, its pages of posts, the post being looked at, and what's selected. */
+/** One native browsing session on any site: a search, its pages of posts, the post being looked at, and what's selected. */
 class BooruViewModel(
     val service: Service,
     val client: BooruClient,
@@ -59,6 +60,8 @@ class BooruViewModel(
         val showOriginal: Boolean = false,
         val selection: Set<Long> = emptySet(),
         val safeMode: Boolean = false,
+        /** True when the site only answers searches and none has been typed yet. */
+        val needsQuery: Boolean = false,
     ) {
         val selectedIndex: Int get() = selected?.let { s -> posts.indexOfFirst { it.id == s.id } } ?: -1
         val selectedPosts: List<BooruPost> get() = posts.filter { it.id in selection }
@@ -66,7 +69,7 @@ class BooruViewModel(
 
     private val log = KotlinLogging.logger {}
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
-    private val _state = MutableStateFlow(State(safeMode = settings.current.booruSafeMode))
+    private val _state = MutableStateFlow(State(safeMode = settings.current.booruSafeMode && client.safeModeTags.isNotEmpty()))
     val state: StateFlow<State> = _state.asStateFlow()
 
     val history: StateFlow<List<String>> = settings.settings
@@ -133,21 +136,23 @@ class BooruViewModel(
         val tags = client.splitQuery(query).distinct()
         loadJob?.cancel()
         page = 0
+        val needsQuery = tags.isEmpty() && !client.supportsEmptyQuery
         _state.update {
             it.copy(
                 queryText = if (tags.isEmpty()) "" else client.joinQuery(tags) + separator,
                 activeTags = tags,
                 posts = emptyList(),
-                endReached = false,
+                endReached = needsQuery,
                 error = null,
                 hiddenByBlacklist = 0,
                 suggestions = emptyList(),
                 selected = null,
                 selection = emptySet(),
+                needsQuery = needsQuery,
             )
         }
         if (tags.isNotEmpty()) services.rememberSearch(service.id, client.joinQuery(tags))
-        loadMore()
+        if (!needsQuery) loadMore()
     }
 
     fun addTag(tag: String) = search(client.joinQuery(_state.value.activeTags + tag))
@@ -157,6 +162,7 @@ class BooruViewModel(
     fun clearHistory() = services.clearSearchHistory(service.id)
 
     fun toggleSafeMode() {
+        if (client.safeModeTags.isEmpty()) return
         val on = !_state.value.safeMode
         settings.update { it.copy(booruSafeMode = on) }
         _state.update { it.copy(safeMode = on) }
@@ -182,7 +188,8 @@ class BooruViewModel(
                     cur.copy(
                         posts = cur.posts + visible.filterNot { it.id in known },
                         loading = false,
-                        endReached = raw.size < pageSize,
+                        // Sites disagree about page sizes (Pinterest varies, Wallhaven is fixed at 24), so only an empty page ends the feed.
+                        endReached = raw.isEmpty(),
                         hiddenByBlacklist = cur.hiddenByBlacklist + (raw.size - visible.size),
                     )
                 }
@@ -190,7 +197,7 @@ class BooruViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                log.warn(e) { "Booru search failed for '$query' page $requestedPage" }
+                log.warn(e) { "Search failed on ${service.name} for '$query' page $requestedPage" }
                 _state.update { it.copy(loading = false, error = friendly(e)) }
             }
         }
@@ -199,7 +206,8 @@ class BooruViewModel(
     private fun friendly(e: Exception): String {
         val msg = e.message ?: "Search failed"
         return when {
-            "HTTP 401" in msg || "HTTP 403" in msg -> "$msg. This site needs an account: add your login and API key under Manage services."
+            e is MissingCredentialsException -> msg
+            "HTTP 401" in msg || "HTTP 403" in msg -> "$msg. This site wants an account or a key: add them under Manage services."
             "HTTP 422" in msg && client.kind == ServiceKind.DANBOORU -> "Danbooru limits anonymous searches to two tags."
             "HTTP 429" in msg -> "The site is rate-limiting requests. Wait a moment and retry."
             else -> msg
@@ -210,11 +218,11 @@ class BooruViewModel(
 
     fun select(post: BooruPost) {
         _state.update { it.copy(selected = post, selectedCategories = post.tagCategories ?: emptyMap(), showOriginal = false) }
-        if (post.tagCategories != null) return
+        if (post.tagCategories != null && post.tags.isNotEmpty() && client.kind != ServiceKind.WALLHAVEN) return
         categoriesJob?.cancel()
         categoriesJob = scope.launch {
-            val cats = client.tagCategories(post)
-            _state.update { s -> if (s.selected?.id == post.id) s.copy(selectedCategories = cats) else s }
+            val cats = runCatching { client.tagCategories(post) }.getOrDefault(emptyMap())
+            _state.update { s -> if (s.selected?.id == post.id) s.copy(selectedCategories = (post.tagCategories ?: emptyMap()) + cats) else s }
         }
     }
 
@@ -233,9 +241,10 @@ class BooruViewModel(
     fun toggleOriginal() = _state.update { it.copy(showOriginal = !it.showOriginal) }
     fun postPageUrl(post: BooruPost): String = client.postPageUrl(post)
 
-    /** Tags of a post grouped in booru order; unknown categories go last. */
+    /** Tags of a post grouped in booru order; tags only known from the detail lookup are included. */
     fun groupedTags(post: BooruPost, categories: Map<String, TagCategory>): List<Pair<TagCategory, List<String>>> =
-        post.tags.groupBy { categories[it] ?: TagCategory.UNKNOWN }
+        (post.tags + categories.keys).distinct()
+            .groupBy { categories[it] ?: TagCategory.UNKNOWN }
             .entries.sortedBy { it.key.order }
             .map { it.key to it.value.sorted() }
 
@@ -305,20 +314,21 @@ class BooruViewModel(
             serviceId = service.id,
             serviceName = service.name,
             metadata = metadataFor(post, cats),
-            resolve = false,
-            referer = service.url,
-            userAgent = BooruHttp.APP_USER_AGENT,
-            expectedMd5 = if (!useSample && client.kind in MD5_SITES) post.md5 else null,
+            resolve = client.resolveOriginals && !useSample,
+            referer = service.websiteUrl,
+            userAgent = if (client.kind in BROWSER_UA_SITES) BooruHttp.BROWSER_USER_AGENT else BooruHttp.APP_USER_AGENT,
+            expectedMd5 = if (!useSample && post.md5.isNotBlank() && client.kind in MD5_SITES) post.md5 else null,
         )
     }
 
     private fun metadataFor(post: BooruPost, categories: Map<String, TagCategory>): Map<String, String> {
-        val grouped = post.tags.groupBy { categories[it] ?: TagCategory.UNKNOWN }
-        fun cat(c: TagCategory) = grouped[c]?.joinToString(" ") ?: ""
+        val grouped = (post.tags + categories.keys).distinct().groupBy { categories[it] ?: TagCategory.UNKNOWN }
+        fun cat(c: TagCategory) = grouped[c]?.joinToString(" ") { it.replace(' ', '_') } ?: ""
         return buildMap {
-            put("id", post.id.toString())
+            put("id", post.displayId)
             put("md5", post.md5)
-            put("tags", post.tags.joinToString(" "))
+            put("title", post.title ?: "")
+            put("tags", (post.tags + categories.keys).distinct().joinToString(" ") { it.replace(' ', '_') })
             put("artist", cat(TagCategory.ARTIST))
             put("character", cat(TagCategory.CHARACTER))
             put("copyright", cat(TagCategory.COPYRIGHT))
@@ -339,6 +349,8 @@ class BooruViewModel(
 
     private companion object {
         const val PAGE_SIZE = 40
-        val MD5_SITES = setOf(ServiceKind.GELBOORU_V2, ServiceKind.DANBOORU, ServiceKind.MOEBOORU, ServiceKind.E621)
+        val MD5_SITES = setOf(ServiceKind.GELBOORU_V2, ServiceKind.DANBOORU, ServiceKind.MOEBOORU, ServiceKind.E621, ServiceKind.PINTEREST, ServiceKind.ZEROCHAN)
+        /** CDNs that expect a browser rather than an app: Pinterest, Pixiv, DeviantArt's wixmp, plain web pages. */
+        val BROWSER_UA_SITES = setOf(ServiceKind.PINTEREST, ServiceKind.PIXIV, ServiceKind.DEVIANTART, ServiceKind.WEB_GRID, ServiceKind.GIPHY, ServiceKind.TENOR)
     }
 }

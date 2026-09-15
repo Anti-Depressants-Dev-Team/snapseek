@@ -3,6 +3,7 @@ package dev.snapseek.app.ui.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,14 +12,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,14 +48,15 @@ import androidx.compose.ui.window.Dialog
 import dev.snapseek.app.AppGraph
 import dev.snapseek.app.ui.common.UiIcons
 import dev.snapseek.app.ui.theme.SnapSeekColors
-import dev.snapseek.core.booru.BooruPreset
 import dev.snapseek.core.booru.BooruPresets
 import dev.snapseek.core.model.Service
 import dev.snapseek.core.model.ServiceKind
 import dev.snapseek.core.model.ServiceType
 import kotlinx.coroutines.launch
 
-/** Three tabs: what you have, boorus you can add in one click, and any other site by URL. */
+private val NO_KEY_KINDS = setOf(ServiceKind.WEB, ServiceKind.MOEBOORU, ServiceKind.PINTEREST, ServiceKind.PIXIV, ServiceKind.DEVIANTART, ServiceKind.ZEROCHAN, ServiceKind.WEB_GRID)
+
+/** Three tabs: what you have, sites you can add in one click, and any other site by URL. */
 @Composable
 fun ManageServicesDialog(graph: AppGraph, services: List<Service>, onDismiss: () -> Unit) {
     var tab by remember { mutableStateOf(0) }
@@ -63,7 +66,7 @@ fun ManageServicesDialog(graph: AppGraph, services: List<Service>, onDismiss: ()
             shape = RoundedCornerShape(16.dp),
             color = SnapSeekColors.Panel,
             border = BorderStroke(1.dp, SnapSeekColors.Border),
-            modifier = Modifier.width(560.dp),
+            modifier = Modifier.width(600.dp),
         ) {
             Column(Modifier.padding(24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -71,20 +74,16 @@ fun ManageServicesDialog(graph: AppGraph, services: List<Service>, onDismiss: ()
                     IconButton(onClick = onDismiss) { Icon(UiIcons.Close, "Close", tint = SnapSeekColors.TextMuted) }
                 }
                 Spacer(Modifier.height(8.dp))
-                TabRow(
-                    selectedTabIndex = tab,
-                    containerColor = Color.Transparent,
-                    contentColor = SnapSeekColors.PrimaryHover,
-                ) {
-                    listOf("Your services", "Add a booru", "Add a website").forEachIndexed { i, label ->
+                TabRow(selectedTabIndex = tab, containerColor = Color.Transparent, contentColor = SnapSeekColors.PrimaryHover) {
+                    listOf("Your services", "Add a site", "Add by URL").forEachIndexed { i, label ->
                         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }, selectedContentColor = SnapSeekColors.TextMain, unselectedContentColor = SnapSeekColors.TextMuted)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
                 when (tab) {
                     0 -> YourServices(graph, services)
-                    1 -> AddBooru(graph, services, onAdded = { tab = 0 })
-                    else -> AddWebsite(graph, onAdded = { tab = 0 })
+                    1 -> AddPreset(graph, services, onAdded = { tab = 0 })
+                    else -> AddByUrl(graph, onAdded = { tab = 0 })
                 }
             }
         }
@@ -109,6 +108,7 @@ private fun YourServices(graph: AppGraph, services: List<Service>) {
                             Text(service.name, color = SnapSeekColors.TextMain, style = MaterialTheme.typography.bodyLarge)
                             if (service.nsfw) Pill("NSFW", SnapSeekColors.Danger)
                             if (service.credentials != null) Pill("KEY", SnapSeekColors.Success)
+                            else if (service.kind.needsKey) Pill("KEY NEEDED", SnapSeekColors.Warning)
                         }
                         Text(
                             if (service.isBooru) "${service.host} · ${service.kind.label}" else service.host,
@@ -116,9 +116,9 @@ private fun YourServices(graph: AppGraph, services: List<Service>) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    if (service.isBooru && service.kind != ServiceKind.MOEBOORU) {
+                    if (service.kind !in NO_KEY_KINDS) {
                         IconButton(onClick = { editing = if (editing == service.id) null else service.id }) {
-                            Icon(UiIcons.Key, "Account / API key", tint = if (editing == service.id) SnapSeekColors.PrimaryHover else SnapSeekColors.TextMuted)
+                            Icon(UiIcons.Key, "Account / API key", tint = if (editing == service.id || service.kind.needsKey && service.credentials == null) SnapSeekColors.PrimaryHover else SnapSeekColors.TextMuted)
                         }
                     }
                     if (service.type == ServiceType.CUSTOM) {
@@ -133,25 +133,35 @@ private fun YourServices(graph: AppGraph, services: List<Service>) {
     }
 }
 
+private data class KeyHint(val loginLabel: String?, val keyLabel: String, val hint: String)
+
+private fun keyHint(kind: ServiceKind): KeyHint = when (kind) {
+    ServiceKind.GELBOORU_V2 -> KeyHint("User ID", "API key", "gelbooru.com: Account → Options → API Access Credentials.")
+    ServiceKind.DANBOORU -> KeyHint("Login", "API key", "Profile → API keys. Lifts the two-tag limit and shows more posts.")
+    ServiceKind.E621 -> KeyHint("Login", "API key", "Account → Manage API Access.")
+    ServiceKind.PHILOMENA -> KeyHint(null, "API key", "Account settings → API key. Applies your own content filter.")
+    ServiceKind.SZURUBOORU -> KeyHint("Username", "Token", "Account → Login tokens.")
+    ServiceKind.WALLHAVEN -> KeyHint(null, "API key", "wallhaven.cc → Settings → Account → API key. Needed for NSFW purity only.")
+    ServiceKind.GIPHY -> KeyHint(null, "API key", "developers.giphy.com → Create an App (free) → API key.")
+    ServiceKind.TENOR -> KeyHint(null, "API key", "Google Cloud console → enable the Tenor API → Credentials → API key (free).")
+    ServiceKind.UNSPLASH -> KeyHint(null, "Access Key", "unsplash.com/developers → your app → Access Key (free, 50 requests an hour).")
+    ServiceKind.PEXELS -> KeyHint(null, "API key", "pexels.com/api → Your API key (free).")
+    ServiceKind.PIXABAY -> KeyHint(null, "API key", "pixabay.com/api/docs shows your key while logged in (free).")
+    else -> KeyHint("Login", "API key", "")
+}
+
 @Composable
 private fun CredentialsForm(service: Service, onSave: (String?, String?) -> Unit) {
     var login by remember(service.id) { mutableStateOf(service.login ?: "") }
     var key by remember(service.id) { mutableStateOf(service.apiKey ?: "") }
-    val (loginLabel, keyLabel, hint) = when (service.kind) {
-        ServiceKind.GELBOORU_V2 -> Triple("User ID", "API key", "gelbooru.com: Account → Options → API Access Credentials.")
-        ServiceKind.DANBOORU -> Triple("Login", "API key", "Profile → API keys. Lifts the two-tag limit and shows more posts.")
-        ServiceKind.E621 -> Triple("Login", "API key", "Account → Manage API Access.")
-        ServiceKind.PHILOMENA -> Triple("(not used)", "API key", "Account settings → API key. Applies your own content filter.")
-        ServiceKind.SZURUBOORU -> Triple("Username", "Token", "Account → Login tokens.")
-        else -> Triple("Login", "API key", "")
-    }
+    val hint = keyHint(service.kind)
     Column(Modifier.padding(start = 66.dp, top = 6.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(hint, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted)
+        Text(hint.hint, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (service.kind != ServiceKind.PHILOMENA) {
-                OutlinedTextField(value = login, onValueChange = { login = it }, label = { Text(loginLabel) }, singleLine = true, modifier = Modifier.weight(1f))
+            if (hint.loginLabel != null) {
+                OutlinedTextField(value = login, onValueChange = { login = it }, label = { Text(hint.loginLabel) }, singleLine = true, modifier = Modifier.weight(1f))
             }
-            OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text(keyLabel) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.weight(1.4f))
+            OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text(hint.keyLabel) }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.weight(1.4f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onSave(login, key) }, shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = SnapSeekColors.Primary, contentColor = Color.White)) { Text("Save") }
@@ -161,12 +171,12 @@ private fun CredentialsForm(service: Service, onSave: (String?, String?) -> Unit
 }
 
 @Composable
-private fun AddBooru(graph: AppGraph, services: List<Service>, onAdded: () -> Unit) {
+private fun AddPreset(graph: AppGraph, services: List<Service>, onAdded: () -> Unit) {
     var showNsfw by remember { mutableStateOf(false) }
     val presets = BooruPresets.all.filter { showNsfw || !it.nsfw }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Known sites, browsed through their API with tag search.", style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted, modifier = Modifier.weight(1f))
+            Text("Known sites, browsed natively with search, previews and one-click saving.", style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted, modifier = Modifier.weight(1f))
             Text("Show adult sites", style = MaterialTheme.typography.labelSmall, color = SnapSeekColors.TextMuted)
             Spacer(Modifier.width(6.dp))
             Switch(checked = showNsfw, onCheckedChange = { showNsfw = it }, colors = SwitchDefaults.colors(checkedTrackColor = SnapSeekColors.Primary))
@@ -174,13 +184,14 @@ private fun AddBooru(graph: AppGraph, services: List<Service>, onAdded: () -> Un
         Spacer(Modifier.height(8.dp))
         LazyColumn(Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(presets, key = { it.url }) { preset ->
-                val existing = services.firstOrNull { it.url.trimEnd('/').equals(preset.url.trimEnd('/'), ignoreCase = true) }
+                val existing = services.firstOrNull { it.url.trimEnd('/').equals(preset.url.trimEnd('/'), ignoreCase = true) || (it.kind == preset.kind && it.host.equals(preset.host.removePrefix("www."), ignoreCase = true)) }
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(preset.name, color = SnapSeekColors.TextMain, style = MaterialTheme.typography.bodyLarge)
                             Pill(preset.kind.label, SnapSeekColors.PrimaryHover)
                             if (preset.nsfw) Pill("NSFW", SnapSeekColors.Danger)
+                            if (preset.needsKey) Pill("FREE KEY", SnapSeekColors.Warning)
                         }
                         Text(listOfNotNull(preset.host, preset.note).joinToString(" · "), color = SnapSeekColors.TextMuted, style = MaterialTheme.typography.bodySmall)
                     }
@@ -205,7 +216,7 @@ private fun AddBooru(graph: AppGraph, services: List<Service>, onAdded: () -> Un
 }
 
 @Composable
-private fun AddWebsite(graph: AppGraph, onAdded: () -> Unit) {
+private fun AddByUrl(graph: AppGraph, onAdded: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
     var icon by remember { mutableStateOf("") }
@@ -213,13 +224,21 @@ private fun AddWebsite(graph: AppGraph, onAdded: () -> Unit) {
     var nsfw by remember { mutableStateOf(false) }
     var detecting by remember { mutableStateOf(false) }
     var detectNote by remember { mutableStateOf<String?>(null) }
+    var kindMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val valid = name.isNotBlank() && url.isNotBlank() && url.contains('.')
+    val valid = name.isNotBlank() && url.isNotBlank() && url.contains('.') && (kind != ServiceKind.WEB_GRID || url.contains("{q}") || !url.contains("{"))
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, placeholder = { Text("E.g. ArtStation") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(value = url, onValueChange = { url = it; detectNote = null }, label = { Text("URL") }, placeholder = { Text("https://…") }, singleLine = true, modifier = Modifier.weight(1f))
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it; detectNote = null },
+                label = { Text(if (kind == ServiceKind.WEB_GRID) "URL template with {q} and optional {page}" else "URL") },
+                placeholder = { Text(if (kind == ServiceKind.WEB_GRID) "https://example.com/search/{q}?page={page}" else "https://…") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
             OutlinedButton(
                 onClick = {
                     detecting = true
@@ -228,11 +247,12 @@ private fun AddWebsite(graph: AppGraph, onAdded: () -> Unit) {
                         detecting = false
                         if (found != null) {
                             kind = found
-                            detectNote = "Looks like a ${found.label} site."
-                            if (name.isBlank()) name = BooruPresets.byHost(url.removePrefix("https://").removePrefix("http://").trimEnd('/'))?.name ?: url.removePrefix("https://").removePrefix("http://").substringBefore('/')
+                            detectNote = "Looks like ${found.label}. ${found.description}"
+                            if (name.isBlank()) name = BooruPresets.byHost(url.removePrefix("https://").removePrefix("http://").trimEnd('/').substringBefore('/'))?.name
+                                ?: url.removePrefix("https://").removePrefix("http://").substringBefore('/').removePrefix("www.")
                         } else {
                             kind = ServiceKind.WEB
-                            detectNote = "No known booru API answered; it will open as a website."
+                            detectNote = "No known API answered. It will open as a website; pick \"Image grid from a page\" to scrape it instead."
                         }
                     }
                 },
@@ -247,11 +267,32 @@ private fun AddWebsite(graph: AppGraph, onAdded: () -> Unit) {
         detectNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.PrimaryHover) }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("How to browse it", style = MaterialTheme.typography.labelMedium, color = SnapSeekColors.TextMuted)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ServiceKind.entries.take(4).forEach { k -> KindChip(k, kind == k) { kind = k } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                ServiceKind.entries.drop(4).forEach { k -> KindChip(k, kind == k) { kind = k } }
+            Box {
+                OutlinedButton(
+                    onClick = { kindMenu = true },
+                    border = BorderStroke(1.dp, SnapSeekColors.Border),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = SnapSeekColors.TextMain),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(kind.label, modifier = Modifier.weight(1f))
+                    if (kind.needsKey) Pill("FREE KEY", SnapSeekColors.Warning)
+                    Spacer(Modifier.width(8.dp))
+                    Icon(UiIcons.ChevronDown, null, modifier = Modifier.width(16.dp))
+                }
+                DropdownMenu(expanded = kindMenu, onDismissRequest = { kindMenu = false }, modifier = Modifier.widthIn(max = 520.dp)) {
+                    ServiceKind.entries.forEach { k ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(k.label, color = if (k == kind) SnapSeekColors.PrimaryHover else SnapSeekColors.TextMain)
+                                    Text(k.description, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted)
+                                }
+                            },
+                            onClick = { kind = k; kindMenu = false },
+                        )
+                    }
+                }
             }
             Text(kind.description, style = MaterialTheme.typography.bodySmall, color = SnapSeekColors.TextMuted)
         }
@@ -275,16 +316,6 @@ private fun AddWebsite(graph: AppGraph, onAdded: () -> Unit) {
 }
 
 @Composable
-private fun KindChip(kind: ServiceKind, selected: Boolean, onClick: () -> Unit) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(kind.label) },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = SnapSeekColors.PrimaryContainer, selectedLabelColor = Color.White, labelColor = SnapSeekColors.TextMuted),
-    )
-}
-
-@Composable
 private fun Pill(text: String, color: Color) {
     Text(
         text.uppercase(),
@@ -293,7 +324,3 @@ private fun Pill(text: String, color: Color) {
         modifier = Modifier.background(color.copy(alpha = 0.15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
-
-/** Kept so BooruPreset shows up in the import list for the icon lookup in ServiceIcon. */
-@Suppress("unused")
-private val presetType = BooruPreset::class

@@ -92,7 +92,10 @@ class ServiceRepository(private val store: SettingsStore) {
             var e = existing
             if (e.regions.isEmpty() && builtIn.regions.isNotEmpty()) e = e.copy(regions = builtIn.regions)
             // Built-ins that gained a native mode switch to it; the card still offers the website as a fallback.
-            if (e.kind == ServiceKind.WEB && builtIn.kind != ServiceKind.WEB) e = e.copy(kind = builtIn.kind)
+            if (e.kind == ServiceKind.WEB && builtIn.kind != ServiceKind.WEB) {
+                e = e.copy(kind = builtIn.kind)
+                if (builtIn.kind == ServiceKind.WEB_GRID) e = e.copy(url = builtIn.url)
+            }
             e
         }
         s.copy(services = repaired + DefaultServices.all.filter { it.id !in known })

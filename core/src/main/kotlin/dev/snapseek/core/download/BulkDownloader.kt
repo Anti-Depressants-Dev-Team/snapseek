@@ -85,11 +85,11 @@ class BulkDownloader(private val downloads: DownloadManager, private val scope: 
                         enqueued++
                     }
                     set(Entry(task, Status.Running(pages, seen, enqueued, hidden)))
-                    if (raw.size < client.maxPageSize) {
-                        reason = "no more posts"
+                    page++
+                    if (pages >= 400) {
+                        reason = "stopped after 400 pages"
                         break
                     }
-                    page++
                     delay(400)   // be polite to the site between pages
                 }
                 set(Entry(task, Status.Done(enqueued, hidden, reason)))

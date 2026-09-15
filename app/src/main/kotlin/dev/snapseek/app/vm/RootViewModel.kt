@@ -51,13 +51,13 @@ class RootViewModel(private val graph: AppGraph) {
     /** Opens a service the way it prefers: natively for boorus, in the embedded browser for everything else. */
     fun openService(serviceId: String) {
         val service = graph.services.byId(serviceId) ?: return
-        if (service.isBooru) openBooru(service) else openWeb(service, service.url)
+        if (service.isBooru) openBooru(service) else openWeb(service, service.websiteUrl)
     }
 
     /** Always the website, even for services that have a native mode. */
     fun openWebsite(serviceId: String) {
         val service = graph.services.byId(serviceId) ?: return
-        openWeb(service, service.url)
+        openWeb(service, service.websiteUrl)
     }
 
     /** Any URL in the embedded browser, for example a post's source link. */
