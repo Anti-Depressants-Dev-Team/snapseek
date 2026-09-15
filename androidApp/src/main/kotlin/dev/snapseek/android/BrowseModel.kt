@@ -12,7 +12,10 @@ import dev.snapseek.core.model.OutputFormat
 import dev.snapseek.core.model.Service
 import android.util.Log
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +44,10 @@ class BrowseModel(
     )
 
 
-    private val scope = graph.scope
+    private val scope = CoroutineScope(graph.scope.coroutineContext + SupervisorJob(graph.scope.coroutineContext[Job]))
+
+    /** Leaving the screen stops whatever this session had in flight. */
+    fun dispose() = scope.cancel()
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 

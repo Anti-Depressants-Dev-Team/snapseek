@@ -8,9 +8,10 @@ Browse Pinterest, Pixiv, Safebooru, DeviantArt and more inside one window, and s
 
 | Module | Role |
 |---|---|
-| `core/` | Pure Kotlin. Settings, services, the download pipeline (resolve → fetch → hash → transcode → name → write → record), site rules, ad-block list. No UI, no Chromium. Unit-tested. |
-| `browser/` | Chromium through [JCEF](https://github.com/jcefmaven/jcefmaven). Request interception (Referer, ad blocking), image context menu, page scripts (Dark Reader, lazy-image fixes, Alt+click), cookie access. Everything behind a small `BrowserEngine` interface. |
+| `core/` | Pure Kotlin, shared by both apps. Site clients, settings, services, the download pipeline (resolve → fetch → hash → transcode → name → write → record), site rules, ad-block list. No UI, no Chromium, and nothing the desktop has that a phone doesn't. Unit-tested. |
+| `browser/` | Chromium through [JCEF](https://github.com/jcefmaven/jcefmaven). Request interception (Referer, ad blocking), image context menu, page scripts (Dark Reader, lazy-image fixes, Alt+click), cookie access. Everything behind a small `BrowserEngine` interface. Desktop only. |
 | `app/` | Compose Multiplatform desktop UI: frameless window, service grid, browser screen with download tray, settings, history. Packaging via `jpackage`. |
+| `androidApp/` | The phone app: Compose on Android, the same site clients, saving into the gallery through MediaStore, sign-in through a WebView. |
 
 ## Build and run
 
@@ -91,9 +92,21 @@ Home → Manage services → **Add a site** lists all of the above as one-click 
 
 **File names** use Boorusama's token grammar. Web downloads default to `{service}_{date}_{hash8}`, booru downloads to `{booru}_{id}_{md5:maxlength=8}`. Tokens: `service date hash8 hash md5 original extension uuid` plus `id tags artist character copyright general meta species rating score width height source search` for boorus. Options: `maxlength=N`, `limit=N`, `delimiter=comma|space|underscore|…`, `nomod`, `case=lower|upper|title`, `format=…` (date), `pad_left=N`, `single_letter`. Example: `{character:nomod,limit=2,delimiter=comma} by {artist} - {md5:maxlength=8}`. Collisions get ` (2)`, ` (3)`.
 
+## On a phone
+
+```bash
+./gradlew :androidApp:assembleDebug
+```
+
+Needs an Android SDK; point `local.properties` at it with `sdk.dir=…` (that file is not committed). The APK lands in `androidApp/build/outputs/apk/debug/` and installs with `adb install`. Android 8 and up.
+
+The phone app shares every site client with the desktop, so the same searches, the same tag grammar and the same accounts work there. What it does differently is what a phone does differently: pictures are saved into **Pictures/SnapSeek** through MediaStore, where the gallery finds them and no storage permission is needed, converting runs on Android's own decoders, and signing in happens in a WebView whose cookies the site clients then read. Press **Connect**, sign in, and it comes back to the grid by itself.
+
+Still to come on the phone: bookmarks and history that survive a restart, bulk download, the settings screen, and a share target.
+
 ## Status
 
-Phase 0 (spike), phase 1 and the Boorusama-inspired booru mode across six API families. Not yet done: history thumbnails, video preview for webm posts, edge-resize of the frameless window, macOS packaging, tabs, Zerochan/Sankaku/Hydrus clients.
+Phase 0 (spike), phase 1, the Boorusama-inspired booru mode across six API families, accounts on Pinterest and Pixiv, and a first Android app. Not yet done: history thumbnails, video preview for webm posts, edge-resize of the frameless window, macOS packaging, tabs, Zerochan/Sankaku/Hydrus clients.
 
 ## License
 

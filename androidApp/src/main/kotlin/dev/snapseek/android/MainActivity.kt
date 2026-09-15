@@ -50,12 +50,20 @@ private fun SnapSeekApp(graph: AndroidGraph) {
     var model by remember { mutableStateOf<BrowseModel?>(null) }
 
     fun open(service: Service) {
+        model?.dispose()
         model = BrowseModel(service, graph.client(service), graph)
         screen = Screen.Browse(service.id)
     }
 
+    fun goHome() {
+        model?.dispose()
+        model = null
+        screen = Screen.Home
+    }
+
     BackHandler(enabled = screen !is Screen.Home) {
-        screen = if (screen is Screen.Login) Screen.Browse((screen as Screen.Login).serviceId) else Screen.Home
+        val here = screen
+        if (here is Screen.Login) screen = Screen.Browse(here.serviceId) else goHome()
     }
 
     when (val current = screen) {
@@ -69,7 +77,7 @@ private fun SnapSeekApp(graph: AndroidGraph) {
                 BrowseScreen(
                     model = active,
                     graph = graph,
-                    onBack = { screen = Screen.Home },
+                    onBack = ::goHome,
                     onConnectAccount = { screen = Screen.Login(current.serviceId) },
                 )
             }
