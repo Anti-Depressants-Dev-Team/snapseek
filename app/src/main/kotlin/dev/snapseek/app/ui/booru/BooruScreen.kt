@@ -79,14 +79,12 @@ import dev.snapseek.app.ui.common.UiIcons
 import dev.snapseek.app.ui.theme.SnapSeekColors
 import dev.snapseek.app.vm.BooruViewModel
 import dev.snapseek.core.booru.BooruPost
-import dev.snapseek.core.booru.PinterestClient
 import dev.snapseek.core.booru.RemoteAccount
 import dev.snapseek.core.booru.RemoteCollection
 import dev.snapseek.core.booru.TagCategory
 import dev.snapseek.core.download.BulkDownloader
 import dev.snapseek.core.model.DownloadQuality
 import dev.snapseek.core.model.OutputFormat
-import dev.snapseek.core.model.ServiceKind
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** Native booru browsing: tag search with suggestions, masonry grid, selection, bulk download, and a detail view. */
@@ -191,7 +189,7 @@ fun BooruScreen(vm: BooruViewModel, graph: AppGraph, onOpenWeb: (String) -> Unit
                         collectionNoun = vm.accountClient.collectionNoun,
                         onConnect = onConnectAccount,
                         onHomeFeed = { vm.search("") },
-                        onSearchMine = if (vm.service.kind == ServiceKind.PINTEREST) ({ vm.search(PinterestClient.MINE_PREFIX) }) else null,
+                        onSearchMine = vm.accountClient.savedQuery?.let { q -> { vm.search(q) } },
                         onOpenCollection = vm::openCollection,
                         onRefresh = { vm.refreshAccount(force = true) },
                         onOpenProfile = { account?.let { onOpenWeb("${vm.service.websiteUrl.trimEnd('/')}/${it.username}/") } },

@@ -43,7 +43,7 @@ Every site on the home screen opens as a native grid: a search box, previews, on
 | Platform | How | Needs |
 |---|---|---|
 | Pinterest | Pinterest's own web search endpoint, paged by bookmark token, originals + 236/474/736 renders | nothing |
-| Pixiv | AJAX tag search, daily ranking when the search is empty, tag suggestions | nothing; log in on the website tab for R-18 |
+| Pixiv | AJAX tag search, tag suggestions, daily ranking when the search is empty, and once connected your followed-artists feed, your bookmarks and bookmarking | nothing; connect an account for R-18 and everything personal |
 | DeviantArt | public RSS feed: `boost:popular`, `by:artist`, `in:digitalart` | nothing; 800px previews |
 | Wallhaven | public API, `sorting:toplist`, `atleast:2560x1440` | key only for NSFW |
 | Zerochan | JSON listing, comma-separated tags, suggestions | nothing |
@@ -52,6 +52,8 @@ Every site on the home screen opens as a native grid: a search box, previews, on
 | Any other site | "Image grid from a page": give a URL with `{q}` where the search goes and it lists the images on that page (Wallpapers.com ships this way) | nothing |
 
 Reddit is missing on purpose: it no longer answers anonymous JSON requests.
+
+**Your Pixiv account** works the same way, through the same **Connect account** button. Signed in, the empty grid becomes the newest work from the artists you follow (`mode:daily` still gets the ranking), the account chip lists your **bookmark tags**, and every work can be bookmarked from the details panel or the multi-select bar. Pixiv has no folders, so a bookmark tag is the collection here and "All bookmarks" means bookmarking without a tag; a tag that does not exist yet is created by the first work saved under it. **Search everything I saved** browses all your bookmarks, and `mine:landscape` narrows them to one bookmark tag.
 
 **Your Pinterest account.** Open Pinterest and it checks the embedded browser's session straight away: if you are already signed in, the account chip shows your name and the grid opens on your **home feed**, with no extra steps. If not, press **Connect account**, sign in on the page that opens, and the app brings you back the moment the session appears, feed and boards loaded. There is a **Back to Pinterest** button on that page too, for when you would rather return yourself.
 

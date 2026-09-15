@@ -105,7 +105,7 @@ private fun LoginBanner(login: LoginFlow, onEndLogin: () -> Unit) {
                 color = Color.White,
             )
             Text(
-                login.problem ?: "As soon as you're signed in I'll take you back to ${login.serviceName} with your feed and boards.",
+                login.problem ?: "As soon as you're signed in I'll take you back to ${login.serviceName} with your feed and your ${login.collectionNoun}s.",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (login.problem != null) Color(0xFFFCA5A5) else Color(0xFFD9C7F5),
                 maxLines = 2,

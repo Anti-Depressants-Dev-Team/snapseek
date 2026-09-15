@@ -67,6 +67,45 @@ class PlatformClientsParsingTest {
     }
 
     @Test
+    fun `pixiv reads the account, its bookmark tags and its feeds`() {
+        // Pixiv hands a signed-in browser its viewer and CSRF token in one HTML-escaped meta tag.
+        val html = """<html><head><meta name="global-data" id="meta-global-data" content="{&quot;token&quot;:&quot;abc123&quot;,&quot;userData&quot;:{&quot;id&quot;:&quot;9876&quot;,&quot;pixivId&quot;:&quot;yabosen&quot;,&quot;name&quot;:&quot;Yabo&quot;,&quot;profileImg&quot;:&quot;https://i.pximg.net/u.jpg&quot;}}"/></head></html>"""
+        val data = PixivClient.globalData(html)!!
+        assertEquals("abc123", data.str("token"))
+        assertEquals(RemoteAccount("9876", "yabosen", "Yabo", "https://i.pximg.net/u.jpg"), PixivClient.accountFrom(data))
+        // Signed out there is no such tag, which is how "nobody is logged in" is told apart from a broken read.
+        assertNull(PixivClient.globalData("<html><head><title>pixiv</title></head></html>"))
+
+        val tags = PixivClient.parseBookmarkTags("""{"error":false,"body":{"public":[{"tag":"景色","cnt":12},{"tag":"未分類","cnt":3}],"private":[{"tag":"secret","cnt":1}]}}""")
+        assertEquals(listOf("景色", "secret"), tags.map { it.name })
+        assertEquals(12, tags[0].count)
+        assertTrue(tags[1].isPrivate)
+
+        val work = """{"id":"149699675","title":"森の中","illustType":0,"xRestrict":0,"url":"https://i.pximg.net/c/250x250_80_a2/img-master/img/2026/09/15/18/48/15/149699675_p0_square1200.jpg","tags":["風景"],"userName":"けい","width":1754,"height":1240,"pageCount":1}"""
+        val bookmarks = PixivClient.parseBookmarks("""{"body":{"works":[$work,{"id":"0","isMasked":true}],"total":2}}""")
+        assertEquals(1, bookmarks.size)
+        assertEquals("https://i.pximg.net/img-master/img/2026/09/15/18/48/15/149699675_p0_master1200.jpg", bookmarks.single().fileUrl)
+
+        // The follow feed lists the works unordered and the order separately.
+        val second = work.replace("149699675", "149699676")
+        val feed = PixivClient.parseFollowFeed("""{"body":{"page":{"ids":[149699676,149699675]},"thumbnails":{"illust":[$work,$second]}}}""")
+        assertEquals(listOf(149699676L, 149699675L), feed.map { it.id })
+
+        // A signed-in session cookie starts with the account's own id, the fallback when the meta tag is missing.
+        assertEquals("9876", PixivClient.userIdFromCookie("first_visit_datetime=x; PHPSESSID=9876_a1b2c3; device_token=y"))
+        assertNull(PixivClient.userIdFromCookie("PHPSESSID=anonymous_session; p_ab_id=3"))
+
+        assertEquals("Invalid request.", PixivClient.errorMessage("""{"error":true,"message":"Invalid request.","body":[]}"""))
+        assertNull(PixivClient.errorMessage("""{"error":false,"body":{"last_bookmark_id":"1"}}"""))
+
+        val client = PixivClient("https://www.pixiv.net/")
+        assertEquals("Everything I bookmarked", client.displayTag("mine:"))
+        assertEquals("Bookmarked: 景色", client.displayTag("mine:景色"))
+        assertEquals("mine:", client.feedQuery(RemoteCollection(PixivClient.ALL_BOOKMARKS, "All bookmarks")))
+        assertEquals("mine:景色", client.feedQuery(RemoteCollection("景色", "景色")))
+    }
+
+    @Test
     fun `typing narrows a long collection list, closest names first`() {
         val boards = listOf("Emo/Goth", "Yuno Gasai", "Asthetics", "kaneki ken", "I'm a failure", "Juuzou Suzuya", "gas station")
             .map { RemoteCollection(it, it) }

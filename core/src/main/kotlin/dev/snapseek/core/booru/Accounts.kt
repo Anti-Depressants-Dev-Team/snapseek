@@ -69,6 +69,9 @@ interface AccountCapable {
     /** What this site calls a collection, lowercase singular: "board", "favorite"… */
     val collectionNoun: String get() = "collection"
 
+    /** The query that lists everything this account saved, across all its collections, or null if it can't. */
+    val savedQuery: String? get() = null
+
     /** null when the browser session isn't logged in. Cached; [forceRefresh] re-reads the session. */
     suspend fun account(forceRefresh: Boolean = false): RemoteAccount?
 

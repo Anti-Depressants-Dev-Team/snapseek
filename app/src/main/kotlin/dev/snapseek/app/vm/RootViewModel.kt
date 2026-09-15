@@ -36,6 +36,8 @@ sealed interface Screen {
 data class LoginFlow(
     val serviceId: String,
     val serviceName: String,
+    /** What this site calls a collection, so the banner doesn't promise "boards" on a site that has none. */
+    val collectionNoun: String = "collection",
     val checking: Boolean = false,
     /** Set when the site answered something that isn't "still nobody", so the user isn't left guessing. */
     val problem: String? = null,
@@ -108,7 +110,7 @@ class RootViewModel(private val graph: AppGraph) {
             return
         }
         openWeb(vm.service, ac.loginUrl, keepBooru = true)
-        _login.value = LoginFlow(vm.service.id, vm.service.name)
+        _login.value = LoginFlow(vm.service.id, vm.service.name, ac.collectionNoun)
         log.info { "Waiting for a ${vm.service.name} login at ${ac.loginUrl}" }
         loginJob = scope.launch {
             var attempt = 0

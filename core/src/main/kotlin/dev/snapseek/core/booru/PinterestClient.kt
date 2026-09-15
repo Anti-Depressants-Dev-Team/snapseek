@@ -46,6 +46,7 @@ class PinterestClient(
     override val emptyQueryHint = "Search Pinterest above. Connect your account to see your home feed here and save pins to your boards."
     override val searchPlaceholder = "Search Pinterest, e.g. watercolor landscape  ·  mine:yuno searches everything you saved"
     override val loginUrl = "$root/login/"
+    override val savedQuery = MINE_PREFIX
     override val collectionNoun = "board"
 
     /** A Pinterest search is a phrase, not a tag list. */
