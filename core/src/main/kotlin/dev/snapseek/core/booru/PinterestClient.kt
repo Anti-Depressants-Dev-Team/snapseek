@@ -525,6 +525,8 @@ class PinterestClient(
         fun errorMessage(body: String): String? =
             (parseJson(body) as? JsonObject)?.obj("resource_response")?.obj("error")?.let { it.str("message") ?: it.str("message_detail") }
 
-        private val SCRIPT_JSON = Regex("""<script[^>]*(?:id="__PWS_(?:INITIAL_PROPS|DATA)__"|type="application/json")[^>]*>(\{.*?})</script>""", RegexOption.DOT_MATCHES_ALL)
+        // Both braces are escaped on purpose: Android's regex engine is ICU, which rejects a bare brace that the
+        // JVM quietly accepts, and this pattern is built when the class loads, so getting it wrong is a crash.
+        private val SCRIPT_JSON = Regex("""<script[^>]*(?:id="__PWS_(?:INITIAL_PROPS|DATA)__"|type="application/json")[^>]*>(\{.*?\})</script>""", RegexOption.DOT_MATCHES_ALL)
     }
 }

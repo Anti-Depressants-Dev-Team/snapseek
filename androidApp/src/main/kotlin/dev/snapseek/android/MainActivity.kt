@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,10 +32,15 @@ class MainActivity : ComponentActivity() {
         val graph = AndroidGraph.of(this)
         // The WebView engine is loaded here, on the main thread, before any background client asks for a cookie.
         graph.scope.launch { dev.snapseek.android.platform.WebViewCookies.warmUp() }
+        // A phone that won't let a cable tap the screen still has to be testable, so a service can be named on
+        // the way in:  adb shell am start -n dev.snapseek.android/.MainActivity --es service pinterest
+        val startOn = intent?.getStringExtra("service")?.let { id -> graph.services.byId(id) }
+        val startSearch = intent?.getStringExtra("search")
+
         setContent {
             SnapSeekTheme {
                 Box(Modifier.fillMaxSize().background(Snap.Background).statusBarsPadding().navigationBarsPadding()) {
-                    SnapSeekApp(graph)
+                    SnapSeekApp(graph, startOn, startSearch)
                 }
             }
         }
@@ -48,7 +54,7 @@ private sealed interface Screen {
 }
 
 @Composable
-private fun SnapSeekApp(graph: AndroidGraph) {
+private fun SnapSeekApp(graph: AndroidGraph, startOn: Service? = null, startSearch: String? = null) {
     var screen: Screen by remember { mutableStateOf(Screen.Home) }
     var model by remember { mutableStateOf<BrowseModel?>(null) }
 
@@ -62,6 +68,13 @@ private fun SnapSeekApp(graph: AndroidGraph) {
         model?.dispose()
         model = null
         screen = Screen.Home
+    }
+
+    LaunchedEffect(startOn) {
+        if (startOn != null && screen is Screen.Home) {
+            open(startOn)
+            if (startSearch != null) model?.search(startSearch)
+        }
     }
 
     BackHandler(enabled = screen !is Screen.Home) {
