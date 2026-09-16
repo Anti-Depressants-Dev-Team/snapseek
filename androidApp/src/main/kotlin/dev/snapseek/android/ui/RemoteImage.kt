@@ -2,7 +2,7 @@ package dev.snapseek.android.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -14,12 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import dev.snapseek.android.platform.ImageLoader
 
 /**
- * One picture from the internet. It shows the placeholder colour until the bytes arrive, and asks the loader for
- * something no wider than the screen, which keeps a grid of phone-sized thumbnails off the heap.
+ * One picture from the internet, decoded no larger than the space it is drawn in. That last part matters on a
+ * phone: a grid cell is half the screen wide, and decoding every thumbnail at full screen width costs four times
+ * the memory for pixels nobody can see.
  */
 @Composable
 fun RemoteImage(
@@ -28,16 +29,17 @@ fun RemoteImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     placeholder: Color = Snap.Card,
-    maxWidth: Int = 0,
 ) {
-    val containerWidth = LocalWindowInfo.current.containerSize.width
-    var bitmap by remember(url) { mutableStateOf(loader.cached(url)) }
+    BoxWithConstraints(modifier.background(placeholder)) {
+        val width = with(LocalDensity.current) {
+            if (constraints.hasBoundedWidth) constraints.maxWidth else maxWidth.roundToPx()
+        }
+        var bitmap by remember(url) { mutableStateOf(loader.cached(url)) }
 
-    LaunchedEffect(url) {
-        if (bitmap == null) bitmap = loader.load(url, maxWidth.takeIf { it > 0 } ?: containerWidth.coerceAtLeast(720))
-    }
+        LaunchedEffect(url, width) {
+            if (bitmap == null) bitmap = loader.load(url, width)
+        }
 
-    Box(modifier.background(placeholder)) {
         bitmap?.let {
             Image(
                 bitmap = it.asImageBitmap(),

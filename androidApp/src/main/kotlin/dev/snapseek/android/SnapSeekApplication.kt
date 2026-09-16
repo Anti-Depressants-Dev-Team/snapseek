@@ -9,4 +9,10 @@ class SnapSeekApplication : Application() {
         super.onCreate()
         CrashLog.install(this)
     }
+
+    /** When the system is short of memory, the thumbnails are the first thing worth giving back. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= TRIM_MEMORY_RUNNING_LOW) AndroidGraph.of(this).images.trim(aggressive = level >= TRIM_MEMORY_COMPLETE)
+    }
 }

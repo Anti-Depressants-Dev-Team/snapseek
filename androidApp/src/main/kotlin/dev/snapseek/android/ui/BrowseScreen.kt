@@ -39,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +61,8 @@ fun BrowseScreen(
 ) {
     val state by model.state.collectAsState()
     val grid = rememberLazyStaggeredGridState()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
 
     LaunchedEffect(grid, state.posts.size) {
         androidx.compose.runtime.snapshotFlow { grid.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
@@ -90,7 +94,12 @@ fun BrowseScreen(
             singleLine = true,
             placeholder = { Text(model.client.searchPlaceholder, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Snap.TextMuted) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { model.search() }),
+            // Searching should get the keyboard out of the way; the results are the point.
+            keyboardActions = KeyboardActions(onSearch = {
+                keyboard?.hide()
+                focus.clearFocus()
+                model.search()
+            }),
             shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Snap.PurpleBright,

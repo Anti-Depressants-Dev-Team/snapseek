@@ -14,17 +14,25 @@ import kotlinx.coroutines.withContext
 /**
  * Thumbnails for the grid. Pixiv refuses any image request without a Referer and Pinterest wants a browser agent,
  * so these go out through the same client the rest of the app uses rather than a stock image library. Decoded
- * bitmaps are held in a cache a quarter the size of the app's heap, and only a few downloads run at once so a
- * fast scroll doesn't open fifty sockets.
+ * decoded bitmaps are held in a small capped cache, and only a few downloads run at once so a fast scroll does
+ * not open fifty sockets.
  */
 class ImageLoader(
     private val referers: RefererPolicy,
     private val cookies: CookieSource,
     private val userAgent: String,
 ) {
-    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 4).toInt()) {
+    // Bitmaps live in native memory, so a share of the Java heap limit is only a rough guide to how much of the
+    // phone this is allowed to hold; the hard ceiling is what keeps a long scroll from swelling to hundreds of MB.
+    private val cache = object : LruCache<String, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 8).coerceAtMost(48L * 1024 * 1024).toInt(),
+    ) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
+
+    /** Android asks for memory back when it is short; letting go of thumbnails is the cheapest way to give it. */
+    fun trim(aggressive: Boolean) = if (aggressive) cache.evictAll() else cache.trimToSize(cache.size() / 2)
+
     private val inFlight = Semaphore(4)
 
     fun cached(url: String): Bitmap? = cache.get(url)
