@@ -22,13 +22,15 @@ import dev.snapseek.android.ui.LoginScreen
 import dev.snapseek.android.ui.Snap
 import dev.snapseek.android.ui.SnapSeekTheme
 import dev.snapseek.core.model.Service
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        dev.snapseek.android.platform.WebViewCookies.warmUp()
         val graph = AndroidGraph.of(this)
+        // The WebView engine is loaded here, on the main thread, before any background client asks for a cookie.
+        graph.scope.launch { dev.snapseek.android.platform.WebViewCookies.warmUp() }
         setContent {
             SnapSeekTheme {
                 Box(Modifier.fillMaxSize().background(Snap.Background).statusBarsPadding().navigationBarsPadding()) {

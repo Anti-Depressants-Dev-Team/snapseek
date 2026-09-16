@@ -2,21 +2,28 @@ package dev.snapseek.android.platform
 
 import android.webkit.CookieManager
 import dev.snapseek.core.download.CookieSource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The phone's answer to the desktop's embedded Chromium: logins happen in a WebView, and the system's own cookie
- * jar is what the site clients read afterwards. Same idea, one line of code, because Android keeps the jar for us.
+ * jar is what the site clients read afterwards.
+ *
+ * Every call here goes to the main thread first. Reading a cookie is documented as safe from anywhere, but the
+ * very first call is what loads the WebView engine, and doing that from a background thread while the main one is
+ * doing the same thing is how apps die in native code with nothing catchable thrown. The clients that ask for
+ * cookies all run in the background, so this is where that gets straightened out.
  */
 object WebViewCookies : CookieSource {
 
-    /**
-     * Loading the WebView provider is the main thread's job on some devices, and the first thing to ask for a
-     * cookie is a background coroutine, so the activity wakes it up here while it still has the main thread.
-     */
-    fun warmUp() = runCatching { CookieManager.getInstance().setAcceptCookie(true) }
+    /** Called as the app starts, so the engine is up before anything in the background wants a cookie. */
+    suspend fun warmUp() = onMainThread { CookieManager.getInstance().setAcceptCookie(true) }
 
     override suspend fun cookieHeaderFor(url: String): String? =
-        runCatching { CookieManager.getInstance().getCookie(url) }.getOrNull()?.takeIf { it.isNotBlank() }
+        onMainThread { CookieManager.getInstance().getCookie(url) }?.takeIf { it.isNotBlank() }
 
-    fun flush() = runCatching { CookieManager.getInstance().flush() }
+    suspend fun flush() = onMainThread { CookieManager.getInstance().flush() }
+
+    private suspend fun <T> onMainThread(block: () -> T): T? =
+        withContext(Dispatchers.Main.immediate) { runCatching(block).getOrNull() }
 }
