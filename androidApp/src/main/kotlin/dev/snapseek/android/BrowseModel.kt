@@ -95,7 +95,11 @@ class BrowseModel(
                 val known = current.posts.mapTo(HashSet()) { it.id }
                 val fresh = raw.filter { it.id !in known && !blacklist.hides(it.tags) }
                 page++
-                _state.update { it.copy(posts = it.posts + fresh, loading = false, endReached = raw.isEmpty()) }
+                // The grid is keyed by post id and the same key twice is a crash, so the list is kept unique no
+                // matter what the site sends: a feed handing the same post back inside one page is ordinary.
+                _state.update { s ->
+                    s.copy(posts = (s.posts + fresh).distinctBy { it.id }, loading = false, endReached = raw.isEmpty())
+                }
             }.onFailure { failure ->
                 if (failure is CancellationException) throw failure
                 Log.w(TAG, "Loading " + service.name + " failed", failure)

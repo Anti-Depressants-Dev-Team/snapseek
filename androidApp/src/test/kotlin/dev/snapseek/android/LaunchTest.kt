@@ -43,6 +43,18 @@ class LaunchTest {
         compose.onNodeWithText("Back").assertIsDisplayed()
     }
 
+    /** Sites with accounts take a different path through the screen, and that path is what shipped broken. */
+    @Test
+    fun `opening a site that has an account draws the grid too`() {
+        for (name in listOf("Pinterest", "Pixiv")) {
+            compose.onAllNodesWithTextSafely(name).onFirst().performClick()
+            compose.waitForIdle()
+            compose.onNodeWithText("Back").assertIsDisplayed()
+            compose.onNodeWithText("Back").performClick()
+            compose.waitForIdle()
+        }
+    }
+
     private fun androidx.compose.ui.test.junit4.AndroidComposeTestRule<*, *>.onAllNodesWithTextSafely(text: String) =
         onAllNodes(hasText(text, substring = true))
 }

@@ -357,7 +357,9 @@ class BooruViewModel(
                     if (cur.activeTags != tagsAtStart) return@update cur
                     val known = cur.posts.mapTo(HashSet()) { it.id }
                     cur.copy(
-                        posts = cur.posts + visible.filterNot { it.id in known },
+                        // The grid is keyed by post id and the same key twice is a crash, so the list is kept
+                        // unique whatever the site sends: a feed repeating a post inside one page is ordinary.
+                        posts = (cur.posts + visible.filterNot { it.id in known }).distinctBy { it.id },
                         loading = false,
                         // Sites disagree about page sizes (Pinterest varies, Wallhaven is fixed at 24), so only an empty page ends the feed.
                         endReached = raw.isEmpty(),

@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        dev.snapseek.android.platform.WebViewCookies.warmUp()
         val graph = AndroidGraph.of(this)
         setContent {
             SnapSeekTheme {
