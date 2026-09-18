@@ -40,7 +40,8 @@ compose.desktop {
         )
 
         nativeDistributions {
-            targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
+            // Msi for Windows, Dmg for macOS, Deb for Debian and Ubuntu, Rpm for Fedora and openSUSE.
+            targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "SnapSeek"
             packageVersion = project.version.toString()
             description = "Browse Pinterest, Pixiv and more, and save images in the format you want."
@@ -64,6 +65,12 @@ compose.desktop {
             }
             linux {
                 iconFile.set(rootProject.file("branding/snapseek.png"))
+                packageName = "snapseek"
+                menuGroup = "Graphics"
+                appCategory = "Graphics"
+                // Named on the rpm so Fedora installs it without complaining about an unknown licence.
+                rpmLicenseType = "MIT"
+                debMaintainer = "yabosen@users.noreply.github.com"
             }
         }
 

@@ -111,3 +111,24 @@ Phase 0 (spike), phase 1, the Boorusama-inspired booru mode across six API famil
 ## License
 
 MIT. Dark Reader is bundled under its MIT license (see `browser/src/main/resources/scripts/darkreader.LICENSE.txt`).
+
+## Releases
+
+Every push of a version tag builds and publishes the lot:
+
+```bash
+git tag v2.1.0 && git push origin v2.1.0
+```
+
+That produces a Windows installer and a portable zip, a `.deb` for Debian and Ubuntu, an `.rpm` built inside Fedora, a macOS `.dmg`, an Android `.apk`, and a `SHA256SUMS.txt`, all attached to a GitHub release. Running the workflow by hand from the Actions tab builds the same set and keeps the files on the run page without publishing or tagging anything, which is the way to try a change to it.
+
+Nothing is signed with a paid certificate, so Windows shows a SmartScreen warning and macOS asks for a right-click then Open the first time. The Android APK is signed only if the repository has these four secrets, and installs as an ordinary app when it does:
+
+| Secret | What goes in it |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | your keystore, base64 encoded (`base64 -w0 release.jks`) |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | the key alias inside it |
+| `ANDROID_KEY_PASSWORD` | that key's password |
+
+Without them the build still runs and produces an APK marked `-unsigned`, which has to be signed before a phone will take it.

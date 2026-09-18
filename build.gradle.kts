@@ -6,7 +6,13 @@ plugins {
     alias(libs.plugins.android.application) apply false
 }
 
+/**
+ * The version every installer is stamped with. A release build passes the tag in (-PappVersion=2.1.0); a local
+ * build gets the fallback, so nothing has to be edited to build one.
+ */
+val appVersion: String = (findProperty("appVersion") as String?)?.removePrefix("v")?.takeIf { it.isNotBlank() } ?: "2.0.0"
+
 allprojects {
     group = "dev.snapseek"
-    version = "2.0.0"
+    version = appVersion
 }

@@ -13,14 +13,33 @@ android {
         minSdk = 26
         // Stays a release behind compileSdk until the app has been run on that platform.
         targetSdk = 36
-        versionCode = 1
+        // Every release build has to outrank the last one, and a tag gives no number, so CI passes the run count.
+        versionCode = (project.findProperty("androidVersionCode") as String?)?.toIntOrNull() ?: 1
         versionName = project.version.toString()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    /**
+     * A release APK has to be signed by somebody or Android will not install it. CI decodes a keystore from the
+     * repository's secrets into these variables; without them there is no release signing config at all, and
+     * `assembleRelease` produces the unsigned APK it would have anyway.
+     */
+    val keystore = System.getenv("ANDROID_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let(::file)?.takeIf { it.isFile }
+    if (keystore != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = keystore
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 

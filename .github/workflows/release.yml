@@ -1,117 +1,265 @@
 name: Release
 
+# Push a tag and every installer comes out the other end:
+#
+#     git tag v2.1.0 && git push origin v2.1.0
+#
+# Or run it by hand from the Actions tab with a version, which builds everything without tagging anything.
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'package.json'
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, without the v (for example 2.1.0). A manual run only builds and keeps the files; it publishes nothing.'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
-  tag:
+  version:
+    name: Work out the version
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.VERSION }}
-      should_release: ${{ steps.tag_check.outputs.should_release }}
+      version: ${{ steps.pick.outputs.version }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Get Version
-        id: get_version
-        run: echo "VERSION=$(jq -r .version package.json)" >> $GITHUB_OUTPUT
-
-      - name: Check if Tag Already Exists
-        id: tag_check
+      - id: pick
         run: |
-          if git rev-parse "v${{ steps.get_version.outputs.VERSION }}" >/dev/null 2>&1; then
-            echo "should_release=false" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and Push Tag
-        if: steps.tag_check.outputs.should_release == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.get_version.outputs.VERSION }}"
-          git push origin "v${{ steps.get_version.outputs.VERSION }}"
-
-  build:
-    needs: tag
-    if: needs.tag.outputs.should_release == 'true'
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
-
+  windows:
+    name: Windows installer
+    needs: version
+    runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
 
-      - name: Install Linux Dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libfuse2
+      # jpackage builds an MSI with WiX 3, which is not the WiX on the PATH by default.
+      - name: Put WiX 3 on the PATH
+        shell: pwsh
+        run: |
+          $wix = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Directory -ErrorAction SilentlyContinue |
+                 Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wix) {
+            choco install wixtoolset --version=3.11.2 --no-progress -y
+            $wix = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          }
+          "$($wix.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
-      - name: Install Dependencies
-        run: npm ci
+      - name: Build the installer and a portable build
+        run: .\gradlew.bat :app:packageMsi :app:createDistributable "-PappVersion=${{ needs.version.outputs.version }}" --no-daemon
 
-      - name: Rebuild Native Modules for Electron
-        run: npx electron-builder install-app-deps
+      - name: Zip the portable build
+        shell: pwsh
+        run: |
+          $out = "SnapSeek-${{ needs.version.outputs.version }}-windows-portable.zip"
+          Compress-Archive -Path app\build\compose\binaries\main\app\SnapSeek -DestinationPath $out
+          Get-ChildItem app\build\compose\binaries\main\msi\*.msi |
+            ForEach-Object { Move-Item $_.FullName "SnapSeek-${{ needs.version.outputs.version }}-windows.msi" }
 
-      - name: Build UI
-        run: npm run build:ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            SnapSeek-*-windows.msi
+            SnapSeek-*-windows-portable.zip
 
-      - name: Create Windows Icon
-        if: matrix.os == 'windows-latest'
-        run: npm run create-icon
-
-      - name: Build and Release Electron App
-        run: npx electron-builder --publish always
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-  publish:
-    needs: [tag, build]
+  debian:
+    name: Debian and Ubuntu package
+    needs: version
     runs-on: ubuntu-latest
     steps:
-      - name: Publish Release
-        uses: actions/github-script@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          script: |
-            const version = 'v${{ needs.tag.outputs.version }}';
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-            const release = releases.find(r => r.tag_name === version);
-            if (release && release.draft) {
-              await github.rest.repos.updateRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: release.id,
-                draft: false,
-                name: `SnapSeek ${version}`,
-              });
-              console.log(`Published release ${version}`);
-            } else if (release) {
-              console.log(`Release ${version} is already published`);
-            } else {
-              console.log(`No release found for ${version}`);
-            }
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install what jpackage needs for a deb
+        run: sudo apt-get update && sudo apt-get install -y fakeroot binutils
+
+      - name: Build the deb
+        run: ./gradlew :app:packageDeb "-PappVersion=${{ needs.version.outputs.version }}" --no-daemon
+
+      - name: Name it after the release
+        run: |
+          deb=$(find app/build/compose/binaries/main/deb -name '*.deb' | head -1)
+          cp "$deb" "SnapSeek-${{ needs.version.outputs.version }}-amd64.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian
+          path: SnapSeek-*.deb
+
+  fedora:
+    name: Fedora package
+    needs: version
+    runs-on: ubuntu-latest
+    # Built inside Fedora rather than on Ubuntu, so the rpm and the runtime inside it are the ones Fedora expects.
+    container: fedora:42
+    steps:
+      - name: Install the toolchain
+        run: dnf -y install java-21-openjdk-devel rpm-build binutils findutils tar git-core
+
+      - uses: actions/checkout@v4
+
+      - name: Build the rpm
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-21-openjdk
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:packageRpm "-PappVersion=${{ needs.version.outputs.version }}" --no-daemon
+
+      - name: Name it after the release
+        run: |
+          rpm=$(find app/build/compose/binaries/main/rpm -name '*.rpm' | head -1)
+          cp "$rpm" "SnapSeek-${{ needs.version.outputs.version }}-x86_64.rpm"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fedora
+          path: SnapSeek-*.rpm
+
+  macos:
+    name: macOS disk image
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the dmg
+        run: ./gradlew :app:packageDmg "-PappVersion=${{ needs.version.outputs.version }}" --no-daemon
+
+      - name: Name it after the release
+        run: |
+          dmg=$(find app/build/compose/binaries/main/dmg -name '*.dmg' | head -1)
+          cp "$dmg" "SnapSeek-${{ needs.version.outputs.version }}-macos-$(uname -m).dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: SnapSeek-*.dmg
+
+  android:
+    name: Android APK
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install the Android platform the app compiles against
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0"
+
+      # Signing is optional. With the four secrets set the APK installs like any other app and updates in place;
+      # without them the build still runs and produces an unsigned APK that has to be signed before it will install.
+      - name: Unpack the signing key, if there is one
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No ANDROID_KEYSTORE_BASE64 secret; the APK will come out unsigned."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the APK
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.signing.outputs.signed == 'true' && format('{0}/release.jks', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew :androidApp:assembleRelease \
+            "-PappVersion=${{ needs.version.outputs.version }}" \
+            "-PandroidVersionCode=${{ github.run_number }}" \
+            --no-daemon
+
+      - name: Name it after the release
+        run: |
+          apk=$(find androidApp/build/outputs/apk/release -name '*.apk' | head -1)
+          suffix=$([ "${{ steps.signing.outputs.signed }}" = "true" ] && echo "" || echo "-unsigned")
+          cp "$apk" "SnapSeek-${{ needs.version.outputs.version }}-android${suffix}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: SnapSeek-*.apk
+
+  publish:
+    name: Publish the release
+    needs: [version, windows, debian, fedora, macos, android]
+    # Only a tag publishes. A manual run is a dry run: it builds everything and leaves the files on the run page.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: downloads
+
+      - name: Gather everything and check it over
+        run: |
+          mkdir -p release
+          find downloads -type f \( -name '*.msi' -o -name '*.zip' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' -o -name '*.apk' \) \
+            -exec cp {} release/ \;
+          cd release
+          # Written outside the folder first, or the checksum file ends up listing itself.
+          sha256sum -- * > "$RUNNER_TEMP/SHA256SUMS.txt"
+          mv "$RUNNER_TEMP/SHA256SUMS.txt" .
+          ls -la
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          notes=$(cat <<'EOF'
+          ### Install
+
+          | You have | Take |
+          |---|---|
+          | Windows | the `.msi`, or the portable `.zip` if you would rather not install anything |
+          | Debian, Ubuntu, Mint | the `.deb` — `sudo apt install ./SnapSeek-*.deb` |
+          | Fedora, openSUSE | the `.rpm` — `sudo dnf install ./SnapSeek-*.rpm` |
+          | macOS | the `.dmg` |
+          | Android 8 or newer | the `.apk` |
+
+          Nothing here is signed with a paid certificate, so Windows shows a SmartScreen warning
+          (More info → Run anyway) and macOS wants a right-click → Open the first time.
+
+          The desktop app downloads its browser runtime, about 100 MB, on first launch.
+
+          `SHA256SUMS.txt` has the checksums.
+          EOF
+          )
+          gh release create "v$VERSION" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "SnapSeek $VERSION" \
+            --notes "$notes" \
+            --generate-notes
