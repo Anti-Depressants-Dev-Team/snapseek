@@ -33,6 +33,9 @@ compose.desktop {
     application {
         mainClass = "dev.snapseek.app.MainKt"
 
+        // The running app needs to know its own version to tell whether a release is newer than it.
+        jvmArgs += listOf("-Dsnapseek.version=${project.version}")
+
         jvmArgs += listOf(
             "--add-opens", "java.desktop/sun.awt=ALL-UNNAMED",
             "--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED",

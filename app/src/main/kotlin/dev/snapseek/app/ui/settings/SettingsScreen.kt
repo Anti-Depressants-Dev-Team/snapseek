@@ -23,6 +23,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -163,6 +164,28 @@ fun SettingsScreen(graph: AppGraph, parentWindow: Window?, onBack: () -> Unit) {
                     colors = fieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+
+            SectionLabel("Updates")
+            SettingCard {
+                ToggleRow(
+                    title = "Look for new versions",
+                    description = "Asks GitHub once a day whether there is a newer release. Nothing is ever downloaded or installed without you saying so.",
+                    checked = settings.checkForUpdates,
+                    onChange = { on -> edit { it.copy(checkForUpdates = on, skippedVersion = "") } },
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedButton(onClick = { graph.updater.check(userAsked = true) }, shape = RoundedCornerShape(10.dp)) {
+                        Text("Check now")
+                    }
+                    Text(
+                        "You are running ${dev.snapseek.app.BuildInfo.VERSION}" +
+                            if (graph.updater.target == null) ", and no package is published for this system, so updating here is manual." else ".",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = SnapSeekColors.TextMuted,
+                    )
+                }
             }
 
             SectionLabel("Websites")

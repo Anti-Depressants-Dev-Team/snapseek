@@ -68,6 +68,7 @@ class RootViewModel(private val graph: AppGraph) {
 
     fun startEngine() {
         scope.launch { graph.engine.start(graph.engineConfig) }
+        graph.updater.checkOnStart()
     }
 
     /** Opens a service the way it prefers: natively for boorus, in the embedded browser for everything else. */

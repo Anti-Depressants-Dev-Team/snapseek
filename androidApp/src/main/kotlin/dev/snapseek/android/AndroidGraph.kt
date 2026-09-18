@@ -2,6 +2,7 @@ package dev.snapseek.android
 
 import android.content.Context
 import dev.snapseek.android.platform.AndroidTranscoder
+import dev.snapseek.android.platform.AndroidUpdater
 import dev.snapseek.android.platform.GallerySaver
 import dev.snapseek.android.platform.ImageLoader
 import dev.snapseek.android.platform.WebViewCookies
@@ -36,6 +37,7 @@ class AndroidGraph private constructor(
     val bookmarks: BookmarkRepository,
     val images: ImageLoader,
     val saver: GallerySaver,
+    val updater: AndroidUpdater,
     val scope: CoroutineScope,
 ) {
     private val clients = ConcurrentHashMap<String, BooruClient>()
@@ -57,6 +59,10 @@ class AndroidGraph private constructor(
             val services = ServiceRepository(settings)
             val referers = RefererPolicy()
             val fetcher = ImageFetcher(cookies = WebViewCookies, referers = referers)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("snapseek"))
+            val version = runCatching {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            }.getOrNull() ?: "0.0.0"
             return AndroidGraph(
                 settings = settings,
                 services = services,
@@ -65,7 +71,8 @@ class AndroidGraph private constructor(
                 bookmarks = InMemoryBookmarkRepository(),
                 images = ImageLoader(referers, WebViewCookies, BooruHttp.BROWSER_USER_AGENT),
                 saver = GallerySaver(context, fetcher, AndroidTranscoder()),
-                scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("snapseek")),
+                updater = AndroidUpdater(context, settings, scope, currentVersion = version),
+                scope = scope,
             )
         }
     }

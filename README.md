@@ -112,6 +112,14 @@ Phase 0 (spike), phase 1, the Boorusama-inspired booru mode across six API famil
 
 MIT. Dark Reader is bundled under its MIT license (see `browser/src/main/resources/scripts/darkreader.LICENSE.txt`).
 
+## Updating
+
+Both apps look for a newer release once a day and say so on the home screen. Nothing downloads or installs without being asked, and the download is checked against the checksum published with the release before it is run, since that file is about to be executed.
+
+On the desktop, **Update now** fetches the installer for whatever this machine installs (msi, deb, rpm or dmg), starts it and closes the app, because an installer cannot replace files that are still open. Settings has a switch for the daily look and a **Check now** button. On a Linux flavour we publish no package for, it says so instead of offering the wrong thing.
+
+On the phone the APK is sideloaded, so updating means handing a new one to Android's own installer. The first attempt sends you to the system screen that allows this app to install apps; after that it is one tap. **Skip this one** silences a version for good; the next release asks again.
+
 ## Releases
 
 Every push of a version tag builds and publishes the lot:

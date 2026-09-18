@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import dev.snapseek.app.AppGraph
 import dev.snapseek.app.ui.common.Reveal
 import dev.snapseek.app.ui.common.UiIcons
+import dev.snapseek.app.ui.common.UpdateBanner
 import dev.snapseek.app.ui.theme.SnapSeekColors
 import dev.snapseek.browser.EngineState
 import dev.snapseek.core.model.Service
@@ -61,9 +62,13 @@ fun HomeScreen(
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     onRetryEngine: () -> Unit,
+    onOpenWeb: (String) -> Unit,
+    onQuit: () -> Unit,
 ) {
     val settings by graph.settings.settings.collectAsState()
     val services = settings.services
+    val update by graph.updater.available.collectAsState()
+    val downloadState by graph.updater.download.collectAsState()
     var manageOpen by remember { mutableStateOf(false) }
     val ready = engineState is EngineState.Ready
 
@@ -89,6 +94,17 @@ fun HomeScreen(
                 IconButton(onClick = onOpenHistory) { Icon(UiIcons.History, "Download history", tint = SnapSeekColors.TextMuted) }
                 IconButton(onClick = onOpenSettings) { Icon(UiIcons.Settings, "Settings", tint = SnapSeekColors.TextMuted) }
             }
+        }
+
+        update?.let {
+            UpdateBanner(
+                update = it,
+                download = downloadState,
+                onInstall = { graph.updater.install(it, onQuit) },
+                onNotes = { onOpenWeb(it.pageUrl) },
+                onSkip = { graph.updater.skip(it) },
+                onDismiss = graph.updater::dismiss,
+            )
         }
 
         EngineBanner(engineState, onRetryEngine)

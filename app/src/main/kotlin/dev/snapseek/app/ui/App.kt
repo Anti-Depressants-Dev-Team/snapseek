@@ -119,6 +119,8 @@ fun FrameWindowScope.App(
                     onOpenHistory = root::openHistory,
                     onOpenSettings = root::openSettings,
                     onRetryEngine = root::startEngine,
+                    onOpenWeb = { url -> root.openUrl(url) },
+                    onQuit = onClose,
                 )
                 Screen.Settings -> SettingsScreen(graph = graph, parentWindow = window, onBack = root::goHome)
                 Screen.History -> HistoryScreen(graph = graph, onBack = root::goHome)

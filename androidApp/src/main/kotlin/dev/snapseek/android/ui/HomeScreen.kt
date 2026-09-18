@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
@@ -40,6 +41,8 @@ import android.content.Context
 import dev.snapseek.android.AndroidGraph
 import dev.snapseek.android.platform.CrashLog
 import dev.snapseek.core.model.Service
+import dev.snapseek.core.update.DownloadState
+import dev.snapseek.core.update.Update
 
 /** The list you land on: every site the app knows, newest-looking first, one tap to start browsing. */
 @Composable
@@ -48,6 +51,8 @@ fun HomeScreen(graph: AndroidGraph, onOpen: (Service) -> Unit) {
     val services = settings.services.filter { it.enabled }
     val context = LocalContext.current
     var crash by remember { mutableStateOf(CrashLog.last(context)) }
+    val update by graph.updater.available.collectAsState()
+    val downloadState by graph.updater.download.collectAsState()
 
     Column(Modifier.fillMaxSize().background(Snap.Background)) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 28.dp, bottom = 12.dp)) {
@@ -56,6 +61,16 @@ fun HomeScreen(graph: AndroidGraph, onOpen: (Service) -> Unit) {
                 "Browse a site and save what you like, in the format you want.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Snap.TextMuted,
+            )
+        }
+
+        update?.let { newer ->
+            UpdateCard(
+                update = newer,
+                download = downloadState,
+                onInstall = { graph.updater.install(newer) },
+                onSkip = { graph.updater.skip(newer) },
+                onDismiss = graph.updater::dismiss,
             )
         }
 
@@ -162,6 +177,64 @@ private fun CrashCard(report: String, onCopy: () -> Unit, onDismiss: () -> Unit)
                 colors = ButtonDefaults.buttonColors(containerColor = Snap.Danger, contentColor = Color.Black),
             ) { Text("Copy the report") }
             TextButton(onClick = onDismiss) { Text("Dismiss", color = Snap.TextMuted) }
+        }
+    }
+}
+
+/**
+ * A new release, offered rather than imposed: the phone build is sideloaded, so updating means downloading an
+ * APK and letting Android's own installer replace the app. Progress shows while it downloads.
+ */
+@Composable
+private fun UpdateCard(
+    update: Update,
+    download: DownloadState,
+    onInstall: () -> Unit,
+    onSkip: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 12.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .border(1.dp, Snap.PurpleBright, RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("SnapSeek ${update.version} is out", style = MaterialTheme.typography.titleSmall, color = Color.White, fontWeight = FontWeight.Bold)
+        Text(
+            when (download) {
+                is DownloadState.Failed -> download.reason
+                is DownloadState.Done -> "Android is taking over from here."
+                is DownloadState.Running -> "Downloading…"
+                DownloadState.Idle -> update.notes.lineSequence().firstOrNull { it.isNotBlank() }?.take(100)
+                    ?: "Downloads the new app and hands it to Android to install."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (download is DownloadState.Failed) Snap.Danger else Color(0xFFD9C7F5),
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (download is DownloadState.Running) {
+            LinearProgressIndicator(
+                progress = { download.fraction },
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White,
+                trackColor = Color(0x33FFFFFF),
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onInstall,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Snap.Purple, contentColor = Color.White),
+                ) { Text(if (download is DownloadState.Failed) "Try again" else "Update") }
+                TextButton(onClick = onSkip) { Text("Skip this one", color = Color(0xFFD9C7F5)) }
+                TextButton(onClick = onDismiss) { Text("Later", color = Snap.TextMuted) }
+            }
         }
     }
 }

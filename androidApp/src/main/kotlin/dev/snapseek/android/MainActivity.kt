@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val graph = AndroidGraph.of(this)
+        graph.updater.checkOnStart()
         // The WebView engine is loaded here, on the main thread, before any background client asks for a cookie.
         graph.scope.launch { dev.snapseek.android.platform.WebViewCookies.warmUp() }
         // A phone that won't let a cable tap the screen still has to be testable, so a service can be named on

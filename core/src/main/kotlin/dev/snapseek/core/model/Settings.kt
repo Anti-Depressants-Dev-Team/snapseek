@@ -44,5 +44,11 @@ data class Settings(
     val blacklist: String = "",
     /** Recent booru searches, newest first, keyed by service id. */
     val searchHistory: Map<String, List<String>> = emptyMap(),
+    /** Look for a newer release on start. Nothing is ever installed without being asked. */
+    val checkForUpdates: Boolean = true,
+    /** When the last look happened, so a restart in the same day doesn't ask GitHub again. */
+    val lastUpdateCheck: Long = 0,
+    /** A version the user said no to, so they are not asked about that one again. */
+    val skippedVersion: String = "",
     val services: List<Service> = DefaultServices.all,
 )

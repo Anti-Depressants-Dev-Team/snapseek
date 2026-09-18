@@ -18,6 +18,7 @@ import dev.snapseek.core.history.BookmarkRepository
 import dev.snapseek.core.history.HistoryRepository
 import dev.snapseek.core.history.InMemoryBookmarkRepository
 import dev.snapseek.core.history.InMemoryHistoryRepository
+import dev.snapseek.app.platform.DesktopUpdater
 import dev.snapseek.app.platform.SqliteStore
 import dev.snapseek.core.model.Service
 import dev.snapseek.core.services.ServiceRepository
@@ -58,6 +59,11 @@ class AppGraph private constructor(
     )
 
     val imageLoader: ImageLoader by lazy { ImageLoader(paths.cacheDir.resolve("images"), referers, scope) }
+
+    /** Looks for newer releases and, when asked, fetches and starts the installer. */
+    val updater: DesktopUpdater by lazy {
+        DesktopUpdater(settings, scope, paths, currentVersion = BuildInfo.VERSION)
+    }
     val detector: BooruDetector by lazy { BooruDetector() }
 
     private val booruClients = ConcurrentHashMap<String, BooruClient>()
