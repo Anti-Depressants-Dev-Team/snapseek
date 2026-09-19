@@ -120,6 +120,8 @@ On the desktop, **Update now** fetches the installer for whatever this machine i
 
 On the phone the APK is sideloaded, so updating means handing a new one to Android's own installer. The first attempt sends you to the system screen that allows this app to install apps; after that it is one tap. **Skip this one** silences a version for good; the next release asks again.
 
+One catch the first time: a release APK and an APK you built yourself are signed with different keys, and Android will not replace one with the other — it refuses with a signature mismatch rather than explaining itself. If you have a build of your own on the phone, uninstall it before taking the first release. After that, updates replace in place and keep your data.
+
 ## Releases
 
 Every push of a version tag builds and publishes the lot:
@@ -130,7 +132,7 @@ git tag v2.1.0 && git push origin v2.1.0
 
 That produces a Windows installer and a portable zip, a `.deb` for Debian and Ubuntu, an `.rpm` built inside Fedora, a macOS `.dmg`, an Android `.apk`, and a `SHA256SUMS.txt`, all attached to a GitHub release. Running the workflow by hand from the Actions tab builds the same set and keeps the files on the run page without publishing or tagging anything, which is the way to try a change to it.
 
-Nothing is signed with a paid certificate, so Windows shows a SmartScreen warning and macOS asks for a right-click then Open the first time. The Android APK is signed only if the repository has these four secrets, and installs as an ordinary app when it does:
+Nothing is signed with a paid certificate, so Windows shows a SmartScreen warning and macOS asks for a right-click then Open the first time. The Android APK is signed only if the repository has these four secrets, which this one does; a fork needs its own:
 
 | Secret | What goes in it |
 |---|---|
