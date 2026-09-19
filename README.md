@@ -2,7 +2,7 @@
 
 Browse Pinterest, Pixiv, Safebooru, DeviantArt and more inside one window, and save any image in the format you want.
 
-> **This branch is the Kotlin rebuild.** The shipping Electron app lives under [`legacy-electron/`](legacy-electron/) until the rebuild reaches parity. The design and phased plan are in the proposal document linked from the pull request.
+> **SnapSeek is now the Kotlin rebuild**, on the desktop and on Android. The Electron app it grew out of is kept under [`legacy-electron/`](legacy-electron/) for reference; it is no longer built or released.
 
 ## What's here
 
